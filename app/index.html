@@ -1,1 +1,463 @@
-<!-- ShadowLend Frontend -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ShadowLend — Private Lending on Solana</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #07080d;
+    --surface: #0d1017;
+    --surface2: #121620;
+    --border: rgba(255,255,255,0.07);
+    --border-hot: rgba(139,92,246,0.4);
+    --accent: #8b5cf6;
+    --accent2: #06b6d4;
+    --accent3: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #4a5568;
+    --muted2: #718096;
+    --green: #10b981;
+    --red: #ef4444;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(139,92,246,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(139,92,246,0.03) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .glow-orb { position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0; }
+  .glow-orb-1 { width: 500px; height: 500px; background: rgba(139,92,246,0.08); top: -100px; left: -100px; }
+  .glow-orb-2 { width: 400px; height: 400px; background: rgba(6,182,212,0.06); bottom: -100px; right: -100px; }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px;
+    background: rgba(7,8,13,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo { display: flex; align-items: center; gap: 10px; font-family: var(--sans); font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: grid; place-items: center; font-size: 16px; }
+
+  .nav-links { display: flex; gap: 4px; }
+  .nav-link { padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--muted2); cursor: pointer; transition: all 0.15s; border: none; background: transparent; }
+  .nav-link:hover { color: var(--text); background: var(--surface2); }
+  .nav-link.active { color: var(--text); background: var(--surface2); }
+
+  .connect-btn { padding: 8px 16px; background: linear-gradient(135deg, var(--accent), #7c3aed); border: none; border-radius: 8px; color: white; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; font-family: var(--sans); }
+  .connect-btn:hover { opacity: 0.85; }
+  .connect-btn.connected { background: var(--surface2); border: 1px solid var(--border-hot); color: var(--accent); }
+
+  main { position: relative; z-index: 1; max-width: 1160px; margin: 0 auto; padding: 40px 32px 80px; }
+
+  .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 32px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; position: relative; overflow: hidden; }
+  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.5; }
+  .stat-label { font-family: var(--mono); font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .stat-value { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  .stat-encrypted { font-family: var(--mono); font-size: 10px; color: var(--accent); background: rgba(139,92,246,0.1); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+
+  .layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .panel-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-size: 14px; font-weight: 700; }
+  .panel-badge { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 99px; background: rgba(139,92,246,0.12); border: 1px solid rgba(139,92,246,0.3); color: var(--accent); }
+
+  .table-head { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 100px; padding: 12px 24px; background: rgba(255,255,255,0.02); font-family: var(--mono); font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid var(--border); }
+  .asset-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 100px; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
+  .asset-row:hover { background: rgba(255,255,255,0.02); }
+  .asset-row:last-child { border-bottom: none; }
+
+  .asset-info { display: flex; align-items: center; gap: 12px; }
+  .asset-icon { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; flex-shrink: 0; }
+  .asset-name { font-weight: 700; font-size: 14px; }
+  .asset-symbol { font-family: var(--mono); font-size: 11px; color: var(--muted2); }
+  .cell { font-size: 14px; font-weight: 600; }
+  .rate-pill { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--green); }
+
+  .action-btns { display: flex; gap: 6px; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 6px; cursor: pointer; border: none; font-family: var(--sans); transition: all 0.15s; }
+  .btn-supply { background: rgba(139,92,246,0.15); color: var(--accent); border: 1px solid rgba(139,92,246,0.3); }
+  .btn-supply:hover { background: rgba(139,92,246,0.25); }
+  .btn-borrow { background: rgba(6,182,212,0.1); color: var(--accent2); border: 1px solid rgba(6,182,212,0.25); }
+  .btn-borrow:hover { background: rgba(6,182,212,0.2); }
+
+  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+  .privacy-panel { background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(6,182,212,0.05)); border: 1px solid var(--border-hot); border-radius: 16px; padding: 20px; }
+  .privacy-header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .shield-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 7px; display: grid; place-items: center; font-size: 14px; flex-shrink: 0; }
+  .privacy-title { font-size: 13px; font-weight: 700; }
+  .privacy-items { display: flex; flex-direction: column; gap: 10px; }
+  .privacy-item { display: flex; align-items: flex-start; gap: 8px; }
+  .privacy-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; margin-top: 5px; box-shadow: 0 0 6px var(--green); }
+  .privacy-dot.accent { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .privacy-dot.cyan { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  .privacy-text { font-size: 12px; color: var(--muted2); line-height: 1.5; }
+  .privacy-text strong { color: var(--text); }
+
+  .position-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .pos-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .pos-title { font-size: 13px; font-weight: 700; }
+  .encrypted-badge { display: flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 9px; color: var(--accent); background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); padding: 2px 6px; border-radius: 4px; }
+  .enc-dot { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .pos-body { padding: 16px 20px; }
+  .pos-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+  .pos-label { font-family: var(--mono); font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.08em; }
+  .pos-val { font-size: 14px; font-weight: 700; text-align: right; }
+  .pos-ct { font-family: var(--mono); font-size: 9px; color: var(--accent); margin-top: 2px; text-align: right; }
+  .health-bar-wrap { margin: 4px 0 16px; background: var(--surface2); border-radius: 4px; height: 6px; overflow: hidden; }
+  .health-bar { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--green), #34d399); }
+  .decrypt-btn { width: 100%; padding: 10px; background: rgba(139,92,246,0.12); border: 1px solid rgba(139,92,246,0.25); border-radius: 8px; color: var(--accent); font-family: var(--sans); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .decrypt-btn:hover { background: rgba(139,92,246,0.2); }
+
+  .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); display: none; place-items: center; }
+  .modal-overlay.open { display: grid; }
+  .modal { background: var(--surface); border: 1px solid var(--border-hot); border-radius: 20px; padding: 28px; width: 420px; max-width: calc(100vw - 32px); position: relative; animation: slideUp 0.2s ease; }
+  @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal-close { position: absolute; top: 16px; right: 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--muted2); width: 28px; height: 28px; cursor: pointer; display: grid; place-items: center; font-size: 14px; }
+  .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.5px; }
+  .modal-sub { font-size: 12px; color: var(--muted2); margin-bottom: 24px; }
+  .input-group { margin-bottom: 16px; }
+  .input-label { font-family: var(--mono); font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; display: block; }
+  .input-wrap { position: relative; }
+  .amount-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 80px 12px 14px; color: var(--text); font-size: 20px; font-weight: 700; font-family: var(--mono); outline: none; transition: border-color 0.15s; }
+  .amount-input:focus { border-color: var(--accent); }
+  .input-token { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; font-weight: 700; color: var(--muted2); }
+  .info-rows { background: var(--surface2); border-radius: 10px; padding: 14px; margin-bottom: 20px; }
+  .info-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; }
+  .info-row:last-child { margin-bottom: 0; }
+  .info-key { color: var(--muted2); }
+  .info-val { font-family: var(--mono); font-weight: 700; }
+  .arcium-notice { background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); border-radius: 10px; padding: 12px 14px; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-start; }
+  .arcium-notice-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .arcium-notice-text { font-size: 11px; color: var(--muted2); line-height: 1.6; }
+  .arcium-notice-text strong { color: var(--accent); }
+  .modal-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--accent), #7c3aed); border: none; border-radius: 10px; color: white; font-family: var(--sans); font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; }
+  .modal-btn:hover { opacity: 0.9; }
+  .modal-btn.loading { opacity: 0.7; pointer-events: none; }
+  .modal-btn-cyan { background: linear-gradient(135deg, var(--accent2), #0891b2); }
+
+  .flow-section { margin-top: 32px; }
+  .section-label { font-family: var(--mono); font-size: 11px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 16px; }
+  .flow-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px 24px; }
+  .flow-nodes { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .flow-node { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 12px; text-align: center; }
+  .flow-node-icon { font-size: 20px; margin-bottom: 6px; }
+  .flow-node-title { font-size: 11px; font-weight: 700; margin-bottom: 4px; }
+  .flow-node-desc { font-size: 10px; color: var(--muted2); font-family: var(--mono); line-height: 1.4; }
+  .flow-node.arcium { border-color: rgba(139,92,246,0.4); background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(6,182,212,0.04)); }
+  .flow-arrow { color: var(--muted); font-size: 16px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .flow-arrow-label { font-family: var(--mono); font-size: 8px; color: var(--accent); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border-hot); border-radius: 10px; padding: 14px 18px; font-size: 13px; max-width: 300px; z-index: 300; display: none; }
+  .toast.show { display: block; }
+  .toast-title { font-weight: 700; margin-bottom: 4px; color: var(--green); }
+  .toast-msg { font-family: var(--mono); font-size: 11px; color: var(--muted2); }
+</style>
+</head>
+<body>
+
+<div class="glow-orb glow-orb-1"></div>
+<div class="glow-orb glow-orb-2"></div>
+
+<nav>
+  <div class="logo">
+    <div class="logo-icon">🔮</div>
+    ShadowLend
+  </div>
+  <div class="nav-links">
+    <button class="nav-link active">Markets</button>
+    <button class="nav-link">Portfolio</button>
+    <button class="nav-link">Liquidate</button>
+  </div>
+  <button class="connect-btn" id="connectBtn" onclick="toggleConnect()">Connect Wallet</button>
+</nav>
+
+<main>
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">Total Supply (TVL)</div>
+      <div class="stat-value">$84.2M</div>
+      <div class="stat-encrypted">Σ encrypted</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Borrowed</div>
+      <div class="stat-value">$51.7M</div>
+      <div class="stat-encrypted">Σ encrypted</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Active Positions</div>
+      <div class="stat-value">4,219</div>
+      <div class="stat-label" style="margin-top:4px">all positions private</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">MXE Proofs / 24h</div>
+      <div class="stat-value">12,831</div>
+      <div class="stat-label" style="margin-top:4px">Arcium compute jobs</div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Lending Markets</div>
+          <div class="panel-badge">🔮 Arcium MXE Protected</div>
+        </div>
+        <div class="table-head">
+          <span>Asset</span><span>Supply APY</span><span>Borrow APR</span><span>Liquidity</span><span>Col. Factor</span><span></span>
+        </div>
+
+        <div class="asset-row">
+          <div class="asset-info">
+            <div class="asset-icon" style="background:linear-gradient(135deg,#9945ff,#14f195)">◎</div>
+            <div><div class="asset-name">Solana</div><div class="asset-symbol">SOL</div></div>
+          </div>
+          <div><div class="rate-pill">3.42%</div></div>
+          <div><div class="cell" style="color:var(--accent2);font-family:var(--mono);font-size:12px;font-weight:700">5.18%</div></div>
+          <div><div class="cell">$28.4M</div></div>
+          <div><div class="cell">80%</div></div>
+          <div class="action-btns">
+            <button class="btn-sm btn-supply" onclick="openModal('deposit','SOL')">Supply</button>
+            <button class="btn-sm btn-borrow" onclick="openModal('borrow','SOL')">Borrow</button>
+          </div>
+        </div>
+
+        <div class="asset-row">
+          <div class="asset-info">
+            <div class="asset-icon" style="background:linear-gradient(135deg,#2775ca,#60a5fa)">$</div>
+            <div><div class="asset-name">USD Coin</div><div class="asset-symbol">USDC</div></div>
+          </div>
+          <div><div class="rate-pill">5.71%</div></div>
+          <div><div class="cell" style="color:var(--accent2);font-family:var(--mono);font-size:12px;font-weight:700">7.83%</div></div>
+          <div><div class="cell">$31.8M</div></div>
+          <div><div class="cell">85%</div></div>
+          <div class="action-btns">
+            <button class="btn-sm btn-supply" onclick="openModal('deposit','USDC')">Supply</button>
+            <button class="btn-sm btn-borrow" onclick="openModal('borrow','USDC')">Borrow</button>
+          </div>
+        </div>
+
+        <div class="asset-row">
+          <div class="asset-info">
+            <div class="asset-icon" style="background:linear-gradient(135deg,#f7931a,#fcd34d)">₿</div>
+            <div><div class="asset-name">Wrapped Bitcoin</div><div class="asset-symbol">WBTC</div></div>
+          </div>
+          <div><div class="rate-pill">1.94%</div></div>
+          <div><div class="cell" style="color:var(--accent2);font-family:var(--mono);font-size:12px;font-weight:700">3.27%</div></div>
+          <div><div class="cell">$18.6M</div></div>
+          <div><div class="cell">75%</div></div>
+          <div class="action-btns">
+            <button class="btn-sm btn-supply" onclick="openModal('deposit','WBTC')">Supply</button>
+            <button class="btn-sm btn-borrow" onclick="openModal('borrow','WBTC')">Borrow</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-section">
+        <div class="section-label">How Arcium Protects Your Position</div>
+        <div class="flow-diagram">
+          <div class="flow-nodes">
+            <div class="flow-node">
+              <div class="flow-node-icon">👤</div>
+              <div class="flow-node-title">You</div>
+              <div class="flow-node-desc">Encrypt amount<br>with MXE pubkey</div>
+            </div>
+            <div class="flow-arrow">→<div class="flow-arrow-label">ciphertext</div></div>
+            <div class="flow-node">
+              <div class="flow-node-icon">⛓️</div>
+              <div class="flow-node-title">Solana Chain</div>
+              <div class="flow-node-desc">Stores encrypted<br>state only</div>
+            </div>
+            <div class="flow-arrow">↔<div class="flow-arrow-label">ZK proof</div></div>
+            <div class="flow-node arcium">
+              <div class="flow-node-icon">🔮</div>
+              <div class="flow-node-title">Arcium MXE</div>
+              <div class="flow-node-desc">LTV / health / interest<br>computed in MPC</div>
+            </div>
+            <div class="flow-arrow">→<div class="flow-arrow-label">bool proof</div></div>
+            <div class="flow-node">
+              <div class="flow-node-icon">✅</div>
+              <div class="flow-node-title">Verifier</div>
+              <div class="flow-node-desc">Confirms result<br>without seeing data</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="privacy-panel">
+        <div class="privacy-header">
+          <div class="shield-icon">🛡️</div>
+          <div><div class="privacy-title">Arcium Privacy Status</div></div>
+        </div>
+        <div class="privacy-items">
+          <div class="privacy-item">
+            <div class="privacy-dot"></div>
+            <div class="privacy-text"><strong>Collateral amounts</strong> encrypted via ElGamal — invisible on-chain</div>
+          </div>
+          <div class="privacy-item">
+            <div class="privacy-dot accent"></div>
+            <div class="privacy-text"><strong>LTV checked</strong> inside Arcium MPC — only a boolean proof goes on-chain</div>
+          </div>
+          <div class="privacy-item">
+            <div class="privacy-dot cyan"></div>
+            <div class="privacy-text"><strong>Health factors</strong> never published — liquidators must prove via MXE</div>
+          </div>
+          <div class="privacy-item">
+            <div class="privacy-dot"></div>
+            <div class="privacy-text"><strong>Interest accrual</strong> runs on encrypted balances</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="position-panel" id="positionPanel">
+        <div class="pos-header">
+          <div class="pos-title">Your Position</div>
+          <div class="encrypted-badge"><div class="enc-dot"></div>ENCRYPTED</div>
+        </div>
+        <div class="pos-body" id="positionBody">
+          <div style="text-align:center;padding:24px 0;color:var(--muted2);font-size:13px;">Connect wallet to view your encrypted position</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title" id="modalTitle">Supply Collateral</div>
+    <div class="modal-sub">Amounts are encrypted before leaving your browser</div>
+    <div class="input-group">
+      <label class="input-label">Amount</label>
+      <div class="input-wrap">
+        <input class="amount-input" id="amountInput" type="number" placeholder="0.00" />
+        <span class="input-token" id="inputToken">SOL</span>
+      </div>
+    </div>
+    <div class="info-rows">
+      <div class="info-row"><span class="info-key">Encryption</span><span class="info-val" style="color:var(--accent)">ElGamal → MXE</span></div>
+      <div class="info-row"><span class="info-key">Stored on-chain</span><span class="info-val" style="color:var(--accent)">Ciphertext only</span></div>
+    </div>
+    <div class="arcium-notice">
+      <div class="arcium-notice-icon">🔮</div>
+      <div class="arcium-notice-text"><strong>Arcium MXE</strong> verifies your LTV inside multi-party computation. Your exact balance is never revealed on-chain.</div>
+    </div>
+    <button class="modal-btn" id="modalBtn" onclick="submitTransaction()">
+      <span id="modalBtnText">Supply SOL</span>
+    </button>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title" id="toastTitle">✓ Transaction Confirmed</div>
+  <div class="toast-msg" id="toastMsg">Encrypted ciphertext stored on-chain</div>
+</div>
+
+<script>
+  let connected = false;
+  let currentAction = 'deposit';
+  let currentAsset = 'SOL';
+
+  function toggleConnect() {
+    connected = !connected;
+    const btn = document.getElementById('connectBtn');
+    if (connected) {
+      btn.textContent = '◎ 7xKp…3Rqm';
+      btn.classList.add('connected');
+      document.getElementById('positionBody').innerHTML = `
+        <div class="pos-row">
+          <div><div class="pos-label">Collateral</div></div>
+          <div><div class="pos-val">8.20 SOL</div><div class="pos-ct">0x4a8f…c2e1 | 0x9b3d…f841</div></div>
+        </div>
+        <div class="pos-row">
+          <div><div class="pos-label">Borrowed</div></div>
+          <div><div class="pos-val">$612 USDC</div><div class="pos-ct">0x12ca…7f90 | 0x8a21…e334</div></div>
+        </div>
+        <div class="pos-row">
+          <div><div class="pos-label">Health Factor</div></div>
+          <div><div class="pos-val" style="color:var(--green)">1.91</div><div class="pos-ct">computed by Arcium MXE</div></div>
+        </div>
+        <div class="health-bar-wrap"><div class="health-bar" style="width:62%"></div></div>
+        <button class="decrypt-btn" onclick="showToast('🔓 Decrypted Locally','Visible only in your browser')">🔓 Decrypt Balances (local)</button>
+      `;
+    } else {
+      btn.textContent = 'Connect Wallet';
+      btn.classList.remove('connected');
+      document.getElementById('positionBody').innerHTML = '<div style="text-align:center;padding:24px 0;color:var(--muted2);font-size:13px;">Connect wallet to view your encrypted position</div>';
+    }
+  }
+
+  function openModal(action, asset) {
+    if (!connected) { showToast('⚠️ Connect Wallet', 'Please connect your wallet first'); return; }
+    currentAction = action; currentAsset = asset;
+    document.getElementById('modalTitle').textContent = action === 'deposit' ? `Supply ${asset}` : `Borrow ${asset}`;
+    document.getElementById('inputToken').textContent = asset;
+    document.getElementById('modalBtn').className = 'modal-btn' + (action === 'borrow' ? ' modal-btn-cyan' : '');
+    document.getElementById('modalBtnText').textContent = action === 'deposit' ? `Supply ${asset}` : `Borrow ${asset}`;
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function closeModal(e) {
+    if (!e || e.target === document.getElementById('modalOverlay') || e.currentTarget.tagName === 'BUTTON') {
+      document.getElementById('modalOverlay').classList.remove('open');
+    }
+  }
+
+  async function submitTransaction() {
+    const btn = document.getElementById('modalBtn');
+    const btnText = document.getElementById('modalBtnText');
+    const amount = document.getElementById('amountInput').value;
+    if (!amount || amount <= 0) { showToast('⚠️ Invalid Amount', 'Please enter a valid amount'); return; }
+    btn.classList.add('loading');
+    btnText.textContent = '🔒 Encrypting...'; await sleep(800);
+    btnText.textContent = '🔮 Submitting to MXE...'; await sleep(1200);
+    btnText.textContent = '⏳ Awaiting ZK Proof...'; await sleep(1500);
+    btnText.textContent = '📡 Sending tx...'; await sleep(700);
+    btn.classList.remove('loading');
+    btnText.textContent = currentAction === 'deposit' ? `Supply ${currentAsset}` : `Borrow ${currentAsset}`;
+    document.getElementById('modalOverlay').classList.remove('open');
+    showToast('✓ Transaction Confirmed', `${amount} ${currentAsset} — encrypted ciphertext stored on Solana`);
+  }
+
+  function showToast(title, msg) {
+    const t = document.getElementById('toast');
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastMsg').textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>

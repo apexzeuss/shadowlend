@@ -1,0 +1,621 @@
+{
+  "address": "5jqXbgExBEnKPahsQineFmMJHNcEvwnniiYvDy81bZCF",
+  "metadata": {
+    "name": "shadow_lend",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "initialize_faucet",
+      "discriminator": [
+        159,
+        109,
+        237,
+        214,
+        69,
+        231,
+        14,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "faucet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_per_claim",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_claim_amount",
+      "discriminator": [
+        106,
+        133,
+        142,
+        149,
+        60,
+        123,
+        36,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "faucet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claim_faucet",
+      "discriminator": [
+        80,
+        7,
+        251,
+        108,
+        55,
+        145,
+        135,
+        68
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "faucet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  117,
+                  99,
+                  101,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "mint_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient_ata",
+          "writable": true
+        },
+        {
+          "name": "receipt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init_user_stats",
+      "discriminator": [
+        177,
+        113,
+        20,
+        232,
+        181,
+        87,
+        120,
+        62
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "stats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "record_action",
+      "discriminator": [
+        153,
+        153,
+        235,
+        171,
+        52,
+        54,
+        196,
+        145
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "stats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "kind",
+          "type": {
+            "defined": {
+              "name": "ActionKind"
+            }
+          }
+        },
+        {
+          "name": "health_bps",
+          "type": "u16"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "FaucetConfig",
+      "discriminator": [
+        216,
+        31,
+        49,
+        154,
+        106,
+        125,
+        143,
+        142
+      ]
+    },
+    {
+      "name": "ClaimReceipt",
+      "discriminator": [
+        223,
+        233,
+        11,
+        229,
+        124,
+        165,
+        207,
+        28
+      ]
+    },
+    {
+      "name": "UserStats",
+      "discriminator": [
+        176,
+        223,
+        136,
+        27,
+        122,
+        79,
+        32,
+        227
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "FaucetClaimed",
+      "discriminator": [
+        153,
+        213,
+        25,
+        224,
+        176,
+        249,
+        203,
+        218
+      ]
+    },
+    {
+      "name": "ActionRecorded",
+      "discriminator": [
+        115,
+        16,
+        23,
+        116,
+        227,
+        176,
+        247,
+        96
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotAdmin",
+      "msg": "Caller is not the faucet admin."
+    },
+    {
+      "code": 6001,
+      "name": "MintMismatch",
+      "msg": "Mint account does not match the faucet config."
+    },
+    {
+      "code": 6002,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow."
+    },
+    {
+      "code": 6003,
+      "name": "Unauthorized",
+      "msg": "Stats account does not belong to this signer."
+    },
+    {
+      "code": 6004,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow."
+    }
+  ],
+  "types": [
+    {
+      "name": "FaucetConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_per_claim",
+            "type": "u64"
+          },
+          {
+            "name": "total_claimed",
+            "type": "u64"
+          },
+          {
+            "name": "claim_count",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint_authority_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimReceipt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserStats",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_action_at",
+            "type": "i64"
+          },
+          {
+            "name": "proofs_submitted",
+            "type": "u64"
+          },
+          {
+            "name": "supplies",
+            "type": "u64"
+          },
+          {
+            "name": "borrows",
+            "type": "u64"
+          },
+          {
+            "name": "repays",
+            "type": "u64"
+          },
+          {
+            "name": "liquidations",
+            "type": "u64"
+          },
+          {
+            "name": "last_health_bps",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ActionKind",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Supply"
+          },
+          {
+            "name": "Borrow"
+          },
+          {
+            "name": "Repay"
+          },
+          {
+            "name": "Liquidation"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FaucetClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ActionRecorded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "type": {
+              "defined": {
+                "name": "ActionKind"
+              }
+            }
+          },
+          {
+            "name": "health_bps",
+            "type": "u16"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

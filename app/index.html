@@ -1,463 +1,3405 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ShadowLend — Private Lending on Solana</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap');
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b1612" />
+    <meta name="color-scheme" content="dark" />
+    <title>ShadowLend — Credit, hidden in plain sight</title>
+    <script src="./config.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
-  :root {
-    --bg: #07080d;
-    --surface: #0d1017;
-    --surface2: #121620;
-    --border: rgba(255,255,255,0.07);
-    --border-hot: rgba(139,92,246,0.4);
-    --accent: #8b5cf6;
-    --accent2: #06b6d4;
-    --accent3: #f59e0b;
-    --text: #e2e8f0;
-    --muted: #4a5568;
-    --muted2: #718096;
-    --green: #10b981;
-    --red: #ef4444;
-    --mono: 'Space Mono', monospace;
-    --sans: 'Syne', sans-serif;
-  }
+      :root {
+        --bg-0: #070d0b;
+        --bg-1: #0b1612;
+        --bg-2: #11201b;
+        --bg-3: #182d26;
+        --paper: #f4ead8;
+        --paper-soft: #e8dcc4;
+        --paper-deep: #d6c8b0;
+        --ink: #07100d;
+        --ink-soft: #18211f;
+        --line: rgba(244, 234, 216, 0.1);
+        --line-strong: rgba(244, 234, 216, 0.22);
+        --line-paper: #c8b99e;
+        --muted: #8ea69d;
+        --faint: #5b6f68;
+        --green: #62e2a8;
+        --green-deep: #1f5a47;
+        --green-soft: rgba(98, 226, 168, 0.14);
+        --amber: #f0b367;
+        --red: #ff7e6c;
+        --blue: #9bc1ef;
+        --shadow: rgba(0, 0, 0, 0.55);
+        --serif: "Newsreader", "Instrument Serif", Georgia, serif;
+        --display: "Instrument Serif", "Newsreader", Georgia, serif;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+        --radius: 14px;
+        --radius-lg: 22px;
+      }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+      html {
+        scroll-behavior: smooth;
+        background: var(--bg-0);
+      }
 
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(139,92,246,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(139,92,246,0.03) 1px, transparent 1px);
-    background-size: 32px 32px;
-    pointer-events: none;
-    z-index: 0;
-  }
+      body {
+        min-height: 100vh;
+        color: var(--paper);
+        font-family: var(--mono);
+        overflow-x: hidden;
+        background:
+          radial-gradient(
+            ellipse at 20% -10%,
+            rgba(98, 226, 168, 0.18),
+            transparent 55%
+          ),
+          radial-gradient(
+            ellipse at 90% 0%,
+            rgba(240, 179, 103, 0.09),
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at 50% 110%,
+            rgba(98, 226, 168, 0.1),
+            transparent 55%
+          ),
+          linear-gradient(180deg, var(--bg-0), var(--bg-1) 60%, var(--bg-0));
+      }
 
-  .glow-orb { position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0; }
-  .glow-orb-1 { width: 500px; height: 500px; background: rgba(139,92,246,0.08); top: -100px; left: -100px; }
-  .glow-orb-2 { width: 400px; height: 400px; background: rgba(6,182,212,0.06); bottom: -100px; right: -100px; }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(
+              rgba(244, 234, 216, 0.025) 1px,
+              transparent 1px
+            )
+            0 0 / 100% 44px,
+          linear-gradient(
+              90deg,
+              rgba(244, 234, 216, 0.022) 1px,
+              transparent 1px
+            )
+            0 0 / 44px 100%;
+        mask-image: radial-gradient(ellipse at 50% 30%, black 30%, transparent 80%);
+      }
 
-  nav {
-    position: sticky; top: 0; z-index: 100;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 32px;
-    background: rgba(7,8,13,0.85);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
-  }
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background: radial-gradient(
+          circle at var(--cursor-x, 50%) var(--cursor-y, 12%),
+          rgba(98, 226, 168, 0.12),
+          transparent 26rem
+        );
+        transition: background 0.25s linear;
+      }
 
-  .logo { display: flex; align-items: center; gap: 10px; font-family: var(--sans); font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
-  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: grid; place-items: center; font-size: 16px; }
+      #cipherCanvas {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        opacity: 0.55;
+        pointer-events: none;
+        mix-blend-mode: screen;
+      }
 
-  .nav-links { display: flex; gap: 4px; }
-  .nav-link { padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--muted2); cursor: pointer; transition: all 0.15s; border: none; background: transparent; }
-  .nav-link:hover { color: var(--text); background: var(--surface2); }
-  .nav-link.active { color: var(--text); background: var(--surface2); }
+      .vignette {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(
+            ellipse at 50% 50%,
+            transparent 40%,
+            rgba(7, 13, 11, 0.75) 100%
+          );
+      }
 
-  .connect-btn { padding: 8px 16px; background: linear-gradient(135deg, var(--accent), #7c3aed); border: none; border-radius: 8px; color: white; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; font-family: var(--sans); }
-  .connect-btn:hover { opacity: 0.85; }
-  .connect-btn.connected { background: var(--surface2); border: 1px solid var(--border-hot); color: var(--accent); }
+      /* ── Scroll progress bar ─────────────────────────────── */
+      .progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 60;
+        height: 2px;
+        width: 0%;
+        background: linear-gradient(90deg, var(--green), var(--amber));
+        box-shadow: 0 0 14px rgba(98, 226, 168, 0.6);
+      }
 
-  main { position: relative; z-index: 1; max-width: 1160px; margin: 0 auto; padding: 40px 32px 80px; }
+      /* ── Topbar ──────────────────────────────────────────── */
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 16px 28px;
+        background: rgba(7, 13, 11, 0.6);
+        backdrop-filter: blur(18px) saturate(140%);
+        -webkit-backdrop-filter: blur(18px) saturate(140%);
+        border-bottom: 1px solid var(--line);
+        animation: slideDown 0.6s ease both;
+      }
 
-  .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 32px; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; position: relative; overflow: hidden; }
-  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.5; }
-  .stat-label { font-family: var(--mono); font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
-  .stat-value { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
-  .stat-encrypted { font-family: var(--mono); font-size: 10px; color: var(--accent); background: rgba(139,92,246,0.1); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
 
-  .layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+      .brand-mark {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background:
+          radial-gradient(circle at 30% 30%, var(--green), transparent 55%),
+          linear-gradient(135deg, var(--bg-3), var(--bg-1));
+        border: 1px solid var(--line-strong);
+        box-shadow: inset 0 0 10px rgba(98, 226, 168, 0.45),
+          0 0 16px rgba(98, 226, 168, 0.25);
+      }
 
-  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
-  .panel-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  .panel-title { font-size: 14px; font-weight: 700; }
-  .panel-badge { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 99px; background: rgba(139,92,246,0.12); border: 1px solid rgba(139,92,246,0.3); color: var(--accent); }
+      .brand-name {
+        font-family: var(--display);
+        font-size: 26px;
+        line-height: 1;
+        letter-spacing: -0.01em;
+        color: var(--paper);
+      }
 
-  .table-head { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 100px; padding: 12px 24px; background: rgba(255,255,255,0.02); font-family: var(--mono); font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid var(--border); }
-  .asset-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 100px; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
-  .asset-row:hover { background: rgba(255,255,255,0.02); }
-  .asset-row:last-child { border-bottom: none; }
+      .brand-sub {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
 
-  .asset-info { display: flex; align-items: center; gap: 12px; }
-  .asset-icon { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; flex-shrink: 0; }
-  .asset-name { font-weight: 700; font-size: 14px; }
-  .asset-symbol { font-family: var(--mono); font-size: 11px; color: var(--muted2); }
-  .cell { font-size: 14px; font-weight: 600; }
-  .rate-pill { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--green); }
+      .top-links {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
 
-  .action-btns { display: flex; gap: 6px; }
-  .btn-sm { padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 6px; cursor: pointer; border: none; font-family: var(--sans); transition: all 0.15s; }
-  .btn-supply { background: rgba(139,92,246,0.15); color: var(--accent); border: 1px solid rgba(139,92,246,0.3); }
-  .btn-supply:hover { background: rgba(139,92,246,0.25); }
-  .btn-borrow { background: rgba(6,182,212,0.1); color: var(--accent2); border: 1px solid rgba(6,182,212,0.25); }
-  .btn-borrow:hover { background: rgba(6,182,212,0.2); }
+      .top-link {
+        position: relative;
+        padding: 9px 14px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        text-decoration: none;
+        border-radius: 999px;
+        transition: color 0.2s ease, background 0.2s ease;
+      }
 
-  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+      .top-link:hover {
+        color: var(--paper);
+        background: rgba(244, 234, 216, 0.06);
+      }
 
-  .privacy-panel { background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(6,182,212,0.05)); border: 1px solid var(--border-hot); border-radius: 16px; padding: 20px; }
-  .privacy-header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-  .shield-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 7px; display: grid; place-items: center; font-size: 14px; flex-shrink: 0; }
-  .privacy-title { font-size: 13px; font-weight: 700; }
-  .privacy-items { display: flex; flex-direction: column; gap: 10px; }
-  .privacy-item { display: flex; align-items: flex-start; gap: 8px; }
-  .privacy-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; margin-top: 5px; box-shadow: 0 0 6px var(--green); }
-  .privacy-dot.accent { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-  .privacy-dot.cyan { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
-  .privacy-text { font-size: 12px; color: var(--muted2); line-height: 1.5; }
-  .privacy-text strong { color: var(--text); }
+      .connect-btn {
+        position: relative;
+        min-width: 168px;
+        padding: 11px 18px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--bg-0);
+        background: var(--paper);
+        border: 1px solid var(--paper);
+        border-radius: 999px;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.2s ease,
+          background 0.2s ease;
+      }
 
-  .position-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
-  .pos-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  .pos-title { font-size: 13px; font-weight: 700; }
-  .encrypted-badge { display: flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 9px; color: var(--accent); background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); padding: 2px 6px; border-radius: 4px; }
-  .enc-dot { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-  .pos-body { padding: 16px 20px; }
-  .pos-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-  .pos-label { font-family: var(--mono); font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.08em; }
-  .pos-val { font-size: 14px; font-weight: 700; text-align: right; }
-  .pos-ct { font-family: var(--mono); font-size: 9px; color: var(--accent); margin-top: 2px; text-align: right; }
-  .health-bar-wrap { margin: 4px 0 16px; background: var(--surface2); border-radius: 4px; height: 6px; overflow: hidden; }
-  .health-bar { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--green), #34d399); }
-  .decrypt-btn { width: 100%; padding: 10px; background: rgba(139,92,246,0.12); border: 1px solid rgba(139,92,246,0.25); border-radius: 8px; color: var(--accent); font-family: var(--sans); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
-  .decrypt-btn:hover { background: rgba(139,92,246,0.2); }
+      .connect-btn::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          120deg,
+          transparent 30%,
+          rgba(98, 226, 168, 0.55) 50%,
+          transparent 70%
+        );
+        transform: translateX(-120%);
+        transition: transform 0.7s ease;
+      }
 
-  .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); display: none; place-items: center; }
-  .modal-overlay.open { display: grid; }
-  .modal { background: var(--surface); border: 1px solid var(--border-hot); border-radius: 20px; padding: 28px; width: 420px; max-width: calc(100vw - 32px); position: relative; animation: slideUp 0.2s ease; }
-  @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  .modal-close { position: absolute; top: 16px; right: 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--muted2); width: 28px; height: 28px; cursor: pointer; display: grid; place-items: center; font-size: 14px; }
-  .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.5px; }
-  .modal-sub { font-size: 12px; color: var(--muted2); margin-bottom: 24px; }
-  .input-group { margin-bottom: 16px; }
-  .input-label { font-family: var(--mono); font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; display: block; }
-  .input-wrap { position: relative; }
-  .amount-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 80px 12px 14px; color: var(--text); font-size: 20px; font-weight: 700; font-family: var(--mono); outline: none; transition: border-color 0.15s; }
-  .amount-input:focus { border-color: var(--accent); }
-  .input-token { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; font-weight: 700; color: var(--muted2); }
-  .info-rows { background: var(--surface2); border-radius: 10px; padding: 14px; margin-bottom: 20px; }
-  .info-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; }
-  .info-row:last-child { margin-bottom: 0; }
-  .info-key { color: var(--muted2); }
-  .info-val { font-family: var(--mono); font-weight: 700; }
-  .arcium-notice { background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); border-radius: 10px; padding: 12px 14px; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-start; }
-  .arcium-notice-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-  .arcium-notice-text { font-size: 11px; color: var(--muted2); line-height: 1.6; }
-  .arcium-notice-text strong { color: var(--accent); }
-  .modal-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--accent), #7c3aed); border: none; border-radius: 10px; color: white; font-family: var(--sans); font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; }
-  .modal-btn:hover { opacity: 0.9; }
-  .modal-btn.loading { opacity: 0.7; pointer-events: none; }
-  .modal-btn-cyan { background: linear-gradient(135deg, var(--accent2), #0891b2); }
+      .connect-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 0 0 6px rgba(244, 234, 216, 0.06),
+          0 18px 40px rgba(98, 226, 168, 0.25);
+      }
 
-  .flow-section { margin-top: 32px; }
-  .section-label { font-family: var(--mono); font-size: 11px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 16px; }
-  .flow-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px 24px; }
-  .flow-nodes { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .flow-node { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 12px; text-align: center; }
-  .flow-node-icon { font-size: 20px; margin-bottom: 6px; }
-  .flow-node-title { font-size: 11px; font-weight: 700; margin-bottom: 4px; }
-  .flow-node-desc { font-size: 10px; color: var(--muted2); font-family: var(--mono); line-height: 1.4; }
-  .flow-node.arcium { border-color: rgba(139,92,246,0.4); background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(6,182,212,0.04)); }
-  .flow-arrow { color: var(--muted); font-size: 16px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-  .flow-arrow-label { font-family: var(--mono); font-size: 8px; color: var(--accent); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.05em; }
+      .connect-btn:hover::after {
+        transform: translateX(120%);
+      }
 
-  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border-hot); border-radius: 10px; padding: 14px 18px; font-size: 13px; max-width: 300px; z-index: 300; display: none; }
-  .toast.show { display: block; }
-  .toast-title { font-weight: 700; margin-bottom: 4px; color: var(--green); }
-  .toast-msg { font-family: var(--mono); font-size: 11px; color: var(--muted2); }
-</style>
-</head>
-<body>
+      .connect-btn.connected {
+        background: transparent;
+        color: var(--green);
+        border-color: rgba(98, 226, 168, 0.5);
+        box-shadow: inset 0 0 0 1px rgba(98, 226, 168, 0.2),
+          0 0 24px rgba(98, 226, 168, 0.25);
+      }
 
-<div class="glow-orb glow-orb-1"></div>
-<div class="glow-orb glow-orb-2"></div>
+      .pulse-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin-right: 8px;
+        background: var(--green);
+        border-radius: 50%;
+        box-shadow: 0 0 0 0 rgba(98, 226, 168, 0.7);
+        animation: pulse 1.8s infinite;
+      }
 
-<nav>
-  <div class="logo">
-    <div class="logo-icon">🔮</div>
-    ShadowLend
-  </div>
-  <div class="nav-links">
-    <button class="nav-link active">Markets</button>
-    <button class="nav-link">Portfolio</button>
-    <button class="nav-link">Liquidate</button>
-  </div>
-  <button class="connect-btn" id="connectBtn" onclick="toggleConnect()">Connect Wallet</button>
-</nav>
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(98, 226, 168, 0.6);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(98, 226, 168, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(98, 226, 168, 0);
+        }
+      }
 
-<main>
-  <div class="stats-bar">
-    <div class="stat-card">
-      <div class="stat-label">Total Supply (TVL)</div>
-      <div class="stat-value">$84.2M</div>
-      <div class="stat-encrypted">Σ encrypted</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Total Borrowed</div>
-      <div class="stat-value">$51.7M</div>
-      <div class="stat-encrypted">Σ encrypted</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Active Positions</div>
-      <div class="stat-value">4,219</div>
-      <div class="stat-label" style="margin-top:4px">all positions private</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">MXE Proofs / 24h</div>
-      <div class="stat-value">12,831</div>
-      <div class="stat-label" style="margin-top:4px">Arcium compute jobs</div>
-    </div>
-  </div>
+      /* ── Sections ────────────────────────────────────────── */
+      main {
+        position: relative;
+        z-index: 1;
+      }
 
-  <div class="layout">
-    <div>
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">Lending Markets</div>
-          <div class="panel-badge">🔮 Arcium MXE Protected</div>
-        </div>
-        <div class="table-head">
-          <span>Asset</span><span>Supply APY</span><span>Borrow APR</span><span>Liquidity</span><span>Col. Factor</span><span></span>
-        </div>
+      #deployBanner {
+        width: min(1180px, calc(100vw - 48px));
+        margin: 18px auto 0;
+        padding: 12px 18px;
+        border-radius: 12px;
+        background: rgba(240, 179, 103, 0.08);
+        border: 1px solid rgba(240, 179, 103, 0.32);
+        color: var(--paper);
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.5;
+        letter-spacing: 0.02em;
+      }
 
-        <div class="asset-row">
-          <div class="asset-info">
-            <div class="asset-icon" style="background:linear-gradient(135deg,#9945ff,#14f195)">◎</div>
-            <div><div class="asset-name">Solana</div><div class="asset-symbol">SOL</div></div>
-          </div>
-          <div><div class="rate-pill">3.42%</div></div>
-          <div><div class="cell" style="color:var(--accent2);font-family:var(--mono);font-size:12px;font-weight:700">5.18%</div></div>
-          <div><div class="cell">$28.4M</div></div>
-          <div><div class="cell">80%</div></div>
-          <div class="action-btns">
-            <button class="btn-sm btn-supply" onclick="openModal('deposit','SOL')">Supply</button>
-            <button class="btn-sm btn-borrow" onclick="openModal('borrow','SOL')">Borrow</button>
-          </div>
-        </div>
+      #deployBanner .d {
+        color: var(--amber);
+        margin-right: 10px;
+        font-size: 9px;
+        vertical-align: middle;
+      }
 
-        <div class="asset-row">
-          <div class="asset-info">
-            <div class="asset-icon" style="background:linear-gradient(135deg,#2775ca,#60a5fa)">$</div>
-            <div><div class="asset-name">USD Coin</div><div class="asset-symbol">USDC</div></div>
-          </div>
-          <div><div class="rate-pill">5.71%</div></div>
-          <div><div class="cell" style="color:var(--accent2);font-family:var(--mono);font-size:12px;font-weight:700">7.83%</div></div>
-          <div><div class="cell">$31.8M</div></div>
-          <div><div class="cell">85%</div></div>
-          <div class="action-btns">
-            <button class="btn-sm btn-supply" onclick="openModal('deposit','USDC')">Supply</button>
-            <button class="btn-sm btn-borrow" onclick="openModal('borrow','USDC')">Borrow</button>
-          </div>
-        </div>
+      #deployBanner strong {
+        color: var(--amber);
+        font-weight: 700;
+      }
 
-        <div class="asset-row">
-          <div class="asset-info">
-            <div class="asset-icon" style="background:linear-gradient(135deg,#f7931a,#fcd34d)">₿</div>
-            <div><div class="asset-name">Wrapped Bitcoin</div><div class="asset-symbol">WBTC</div></div>
-          </div>
-          <div><div class="rate-pill">1.94%</div></div>
-          <div><div class="cell" style="color:var(--accent2);font-family:var(--mono);font-size:12px;font-weight:700">3.27%</div></div>
-          <div><div class="cell">$18.6M</div></div>
-          <div><div class="cell">75%</div></div>
-          <div class="action-btns">
-            <button class="btn-sm btn-supply" onclick="openModal('deposit','WBTC')">Supply</button>
-            <button class="btn-sm btn-borrow" onclick="openModal('borrow','WBTC')">Borrow</button>
-          </div>
+      @media (max-width: 720px) {
+        #deployBanner {
+          width: min(100% - 28px, 1180px);
+          font-size: 11px;
+          padding: 10px 14px;
+        }
+      }
+
+      .scene {
+        position: relative;
+        min-height: 100vh;
+        padding: 96px 0 80px;
+        scroll-margin-top: 70px;
+      }
+
+      .scene::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(1180px, calc(100vw - 48px));
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--line-strong),
+          transparent
+        );
+      }
+
+      .wrap {
+        width: min(1180px, calc(100vw - 48px));
+        margin: 0 auto;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: var(--green);
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 24px;
+        height: 1px;
+        background: var(--green);
+        box-shadow: 0 0 8px var(--green);
+      }
+
+      .scene-num {
+        position: absolute;
+        top: 36px;
+        right: 28px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        color: var(--faint);
+        opacity: 0.7;
+      }
+
+      /* ── Hero ────────────────────────────────────────────── */
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+        gap: 56px;
+        align-items: end;
+        min-height: calc(100vh - 96px);
+        padding-top: 24px;
+      }
+
+      .hero-text {
+        max-width: 880px;
+      }
+
+      h1.headline {
+        margin-top: 22px;
+        font-family: var(--display);
+        font-size: clamp(64px, 11.5vw, 168px);
+        font-weight: 400;
+        line-height: 0.88;
+        letter-spacing: -0.025em;
+        color: var(--paper);
+      }
+
+      .headline em {
+        font-style: italic;
+        font-family: var(--serif);
+        font-weight: 400;
+        background: linear-gradient(135deg, var(--green), var(--amber));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .headline .ghost {
+        position: relative;
+        display: inline-block;
+        color: var(--paper);
+      }
+
+      .headline .ghost::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        bottom: 0.12em;
+        width: 100%;
+        height: 0.12em;
+        background: var(--green);
+        opacity: 0.18;
+        filter: blur(6px);
+      }
+
+      .hero-copy {
+        max-width: 600px;
+        margin-top: 28px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 36px;
+      }
+
+      .cta {
+        --bg: var(--paper);
+        --fg: var(--ink);
+        --bd: var(--paper);
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 22px;
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        text-decoration: none;
+        color: var(--fg);
+        background: var(--bg);
+        border: 1px solid var(--bd);
+        border-radius: 999px;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .cta::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          120deg,
+          transparent 30%,
+          rgba(255, 255, 255, 0.45) 50%,
+          transparent 70%
+        );
+        transform: translateX(-130%);
+        transition: transform 0.75s ease;
+      }
+
+      .cta:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 22px 48px rgba(98, 226, 168, 0.2);
+      }
+
+      .cta:hover::before {
+        transform: translateX(130%);
+      }
+
+      .cta.ghost {
+        --bg: transparent;
+        --fg: var(--paper);
+        --bd: var(--line-strong);
+      }
+
+      .cta.ghost:hover {
+        --bd: var(--paper);
+        box-shadow: none;
+      }
+
+      .cta .arrow {
+        display: inline-block;
+        transition: transform 0.2s ease;
+      }
+
+      .cta:hover .arrow {
+        transform: translateX(4px);
+      }
+
+      .hero-card {
+        position: relative;
+        padding: 22px;
+        border-radius: var(--radius-lg);
+        background: linear-gradient(
+          145deg,
+          rgba(244, 234, 216, 0.05),
+          rgba(244, 234, 216, 0.015)
+        );
+        border: 1px solid var(--line-strong);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 30px 80px var(--shadow),
+          inset 0 1px 0 rgba(244, 234, 216, 0.06);
+      }
+
+      .hero-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 16px;
+        border-bottom: 1px dashed var(--line);
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .hero-card-head .key {
+        color: var(--muted);
+      }
+
+      .hero-card-head .live {
+        display: inline-flex;
+        align-items: center;
+        color: var(--green);
+        font-weight: 700;
+      }
+
+      .stat {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        padding: 14px 0;
+        border-bottom: 1px dashed var(--line);
+        gap: 16px;
+      }
+
+      .stat:last-of-type {
+        border-bottom: none;
+      }
+
+      .stat-key {
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .stat-val {
+        font-family: var(--display);
+        font-size: 28px;
+        font-weight: 400;
+        color: var(--paper);
+        letter-spacing: -0.01em;
+      }
+
+      .stat-val.small {
+        font-size: 20px;
+      }
+
+      .stat-val.green {
+        color: var(--green);
+      }
+
+      .cipher-line {
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px dashed var(--line);
+        font-size: 10px;
+        line-height: 1.5;
+        color: var(--faint);
+        word-break: break-all;
+      }
+
+      .cipher-line .tag {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--green);
+        font-size: 9px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+      }
+
+      /* ── Scene 2: Encryption demo ────────────────────────── */
+      .demo-grid {
+        margin-top: 56px;
+        display: grid;
+        grid-template-columns: 1fr 80px 1fr;
+        gap: 24px;
+        align-items: stretch;
+      }
+
+      .demo-card {
+        position: relative;
+        padding: 28px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line-strong);
+        background: linear-gradient(
+          145deg,
+          rgba(244, 234, 216, 0.06),
+          rgba(244, 234, 216, 0.015)
+        );
+        backdrop-filter: blur(12px);
+        min-height: 320px;
+      }
+
+      .demo-card.paper {
+        background: var(--paper);
+        color: var(--ink);
+        border-color: var(--line-paper);
+        box-shadow: 0 30px 80px var(--shadow);
+      }
+
+      .demo-card.paper .demo-label,
+      .demo-card.paper .demo-hint {
+        color: var(--faint);
+      }
+
+      .demo-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .demo-amount {
+        margin-top: 28px;
+        font-family: var(--display);
+        font-size: clamp(48px, 7vw, 96px);
+        font-weight: 400;
+        line-height: 0.9;
+        letter-spacing: -0.02em;
+      }
+
+      .demo-amount .unit {
+        margin-left: 12px;
+        font-size: 0.4em;
+        font-family: var(--mono);
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: var(--faint);
+        text-transform: uppercase;
+        vertical-align: 0.5em;
+      }
+
+      .demo-slider {
+        margin-top: 28px;
+      }
+
+      .demo-slider input[type="range"] {
+        width: 100%;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 4px;
+        background: var(--paper-deep);
+        border-radius: 99px;
+        outline: none;
+      }
+
+      .demo-slider input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--ink);
+        cursor: pointer;
+        border: 3px solid var(--paper);
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+        transition: transform 0.15s ease;
+      }
+
+      .demo-slider input[type="range"]:hover::-webkit-slider-thumb {
+        transform: scale(1.1);
+      }
+
+      .demo-hint {
+        margin-top: 18px;
+        font-size: 11px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      .demo-arrow {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .demo-arrow svg {
+        width: 100%;
+        height: 80px;
+      }
+
+      .demo-cipher {
+        margin-top: 20px;
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.8;
+        color: var(--green);
+        word-break: break-all;
+        min-height: 180px;
+      }
+
+      .demo-cipher span {
+        opacity: 0.92;
+        animation: charFlicker 1.6s ease-in-out infinite alternate;
+      }
+
+      @keyframes charFlicker {
+        0% { opacity: 0.55; }
+        100% { opacity: 1; }
+      }
+
+      .demo-foot {
+        margin-top: 22px;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .demo-foot span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .demo-foot .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 8px var(--green);
+      }
+
+      /* ── Scene head shared ───────────────────────────────── */
+      .scene-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 36px;
+        margin-bottom: 12px;
+      }
+
+      .scene-title {
+        margin-top: 14px;
+        font-family: var(--display);
+        font-size: clamp(40px, 6vw, 84px);
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        max-width: 14ch;
+      }
+
+      .scene-title em {
+        font-style: italic;
+        color: var(--green);
+      }
+
+      .scene-copy {
+        max-width: 440px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      /* ── Scene 3: Markets ────────────────────────────────── */
+      .market-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 22px;
+        margin-top: 56px;
+      }
+
+      .market-card {
+        position: relative;
+        padding: 28px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line-strong);
+        background: linear-gradient(
+          155deg,
+          rgba(244, 234, 216, 0.06),
+          rgba(244, 234, 216, 0.01) 60%
+        );
+        backdrop-filter: blur(14px);
+        cursor: pointer;
+        overflow: hidden;
+        transition: transform 0.3s ease, border-color 0.3s ease,
+          box-shadow 0.3s ease;
+      }
+
+      .market-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          circle at var(--mx, 50%) var(--my, 50%),
+          rgba(98, 226, 168, 0.18),
+          transparent 40%
+        );
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+      }
+
+      .market-card:hover {
+        transform: translateY(-6px);
+        border-color: rgba(98, 226, 168, 0.4);
+        box-shadow: 0 30px 70px rgba(98, 226, 168, 0.18),
+          0 0 0 1px rgba(98, 226, 168, 0.15);
+      }
+
+      .market-card:hover::before {
+        opacity: 1;
+      }
+
+      .market-card.selected {
+        border-color: rgba(98, 226, 168, 0.45);
+        background: linear-gradient(
+          155deg,
+          rgba(98, 226, 168, 0.08),
+          rgba(244, 234, 216, 0.02) 60%
+        );
+      }
+
+      .market-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 26px;
+      }
+
+      .asset-mark {
+        width: 48px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: var(--ink);
+        border: 1px solid var(--line-paper);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+      }
+
+      .asset-mark.sol {
+        background: linear-gradient(135deg, #c8b0ff, #6dd3b8 90%);
+      }
+
+      .asset-mark.usdc {
+        background: linear-gradient(135deg, #9bc1ef, #f4ead8 90%);
+      }
+
+      .asset-mark.wbtc {
+        background: linear-gradient(135deg, #f0b367, #f4ead8 90%);
+      }
+
+      .market-tag {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .market-name {
+        font-family: var(--display);
+        font-size: 38px;
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: -0.01em;
+        color: var(--paper);
+      }
+
+      .market-sub {
+        margin-top: 6px;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .market-spark {
+        margin-top: 24px;
+        height: 56px;
+      }
+
+      .market-spark svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      .market-metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px 12px;
+        margin-top: 22px;
+        padding-top: 22px;
+        border-top: 1px dashed var(--line);
+      }
+
+      .market-metric .k {
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .market-metric .v {
+        margin-top: 6px;
+        font-family: var(--display);
+        font-size: 24px;
+        font-weight: 400;
+        line-height: 1;
+        color: var(--paper);
+        letter-spacing: -0.01em;
+      }
+
+      .market-metric .v.green { color: var(--green); }
+      .market-metric .v.amber { color: var(--amber); }
+      .market-metric .v.blue { color: var(--blue); }
+
+      .market-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 26px;
+      }
+
+      .market-btn {
+        flex: 1;
+        padding: 13px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        background: rgba(244, 234, 216, 0.06);
+        color: var(--paper);
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .market-btn:hover {
+        background: var(--paper);
+        color: var(--ink);
+        border-color: var(--paper);
+      }
+
+      .market-btn.borrow:hover {
+        background: var(--green);
+        color: var(--ink);
+        border-color: var(--green);
+        box-shadow: 0 12px 30px rgba(98, 226, 168, 0.3);
+      }
+
+      /* ── Scene 4: Proof flow ─────────────────────────────── */
+      .flow {
+        position: relative;
+        margin-top: 56px;
+      }
+
+      .flow-track {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 64px;
+        height: 2px;
+        background: linear-gradient(
+          90deg,
+          transparent 0,
+          rgba(98, 226, 168, 0.5) 8%,
+          rgba(98, 226, 168, 0.5) 92%,
+          transparent 100%
+        );
+        box-shadow: 0 0 22px rgba(98, 226, 168, 0.4);
+      }
+
+      .flow-track::before {
+        content: "";
+        position: absolute;
+        top: -3px;
+        left: 0;
+        width: 12%;
+        height: 8px;
+        border-radius: 99px;
+        background: linear-gradient(
+          90deg,
+          rgba(98, 226, 168, 0),
+          rgba(98, 226, 168, 1) 50%,
+          rgba(98, 226, 168, 0)
+        );
+        filter: blur(2px);
+        animation: flowDart 4.5s linear infinite;
+      }
+
+      @keyframes flowDart {
+        0% { transform: translateX(-50%); }
+        100% { transform: translateX(900%); }
+      }
+
+      .flow-grid {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+      }
+
+      .flow-step {
+        position: relative;
+        padding: 28px 24px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line-strong);
+        background: linear-gradient(
+          150deg,
+          rgba(244, 234, 216, 0.06),
+          rgba(244, 234, 216, 0.012)
+        );
+        backdrop-filter: blur(12px);
+      }
+
+      .flow-num {
+        display: grid;
+        place-items: center;
+        width: 64px;
+        height: 64px;
+        margin: 8px auto 22px;
+        border-radius: 50%;
+        border: 1px solid rgba(98, 226, 168, 0.5);
+        background: radial-gradient(
+          circle at 50% 30%,
+          rgba(98, 226, 168, 0.35),
+          rgba(98, 226, 168, 0.05)
+        );
+        color: var(--green);
+        font-family: var(--display);
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1;
+        box-shadow: 0 0 22px rgba(98, 226, 168, 0.3),
+          inset 0 0 14px rgba(98, 226, 168, 0.18);
+      }
+
+      .flow-title {
+        font-family: var(--display);
+        font-size: 22px;
+        font-weight: 400;
+        line-height: 1.1;
+        letter-spacing: -0.01em;
+        color: var(--paper);
+      }
+
+      .flow-copy {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .flow-tag {
+        margin-top: 16px;
+        display: inline-block;
+        padding: 5px 10px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--green);
+        border: 1px solid rgba(98, 226, 168, 0.3);
+        border-radius: 99px;
+        background: var(--green-soft);
+      }
+
+      /* ── Scene 5: Position ──────────────────────────────── */
+      .pos-grid {
+        margin-top: 56px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 380px;
+        gap: 22px;
+      }
+
+      .pos-card {
+        position: relative;
+        padding: 32px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line-strong);
+        background: linear-gradient(
+          155deg,
+          rgba(244, 234, 216, 0.05),
+          rgba(244, 234, 216, 0.012)
+        );
+        backdrop-filter: blur(12px);
+        overflow: hidden;
+      }
+
+      .pos-card.paper {
+        background: var(--paper);
+        color: var(--ink);
+        border-color: var(--line-paper);
+        box-shadow: 0 30px 80px var(--shadow);
+      }
+
+      .pos-card.paper .pos-key { color: var(--faint); }
+      .pos-card.paper .pos-hash { color: var(--faint); }
+      .pos-card.paper .pos-headline { color: var(--ink); }
+
+      .pos-headline {
+        font-family: var(--display);
+        font-size: clamp(32px, 4vw, 48px);
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        color: var(--paper);
+      }
+
+      .pos-rows {
+        display: grid;
+        gap: 18px;
+        margin-top: 26px;
+      }
+
+      .pos-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        padding-bottom: 16px;
+        border-bottom: 1px dashed var(--line-paper);
+        gap: 18px;
+      }
+
+      .pos-row:last-child { border-bottom: none; }
+
+      .pos-key {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+
+      .pos-val {
+        text-align: right;
+        font-family: var(--display);
+        font-size: 24px;
+        font-weight: 400;
+        letter-spacing: -0.01em;
+      }
+
+      .pos-val.green { color: var(--green-deep); }
+
+      .pos-hash {
+        margin-top: 4px;
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--faint);
+        letter-spacing: 0.05em;
+      }
+
+      .gauge {
+        position: relative;
+        display: grid;
+        place-items: center;
+        padding: 18px 0 6px;
+      }
+
+      .gauge svg {
+        width: 220px;
+        height: 220px;
+      }
+
+      .gauge-num {
+        position: absolute;
+        text-align: center;
+      }
+
+      .gauge-num .v {
+        display: block;
+        font-family: var(--display);
+        font-size: 48px;
+        font-weight: 400;
+        line-height: 1;
+        color: var(--paper);
+      }
+
+      .gauge-num .l {
+        margin-top: 6px;
+        font-size: 9px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .empty {
+        margin-top: 26px;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--muted);
+      }
+
+      .empty .cta-link {
+        color: var(--green);
+        text-decoration: none;
+        border-bottom: 1px dashed var(--green);
+        cursor: pointer;
+      }
+
+      .stat-strip {
+        margin-top: 64px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 28px;
+      }
+
+      .strip-stat .k {
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .strip-stat .v {
+        margin-top: 10px;
+        font-family: var(--display);
+        font-size: clamp(38px, 5vw, 64px);
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        background: linear-gradient(180deg, var(--paper), #b6c8c0);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .strip-stat .v.glow {
+        background: linear-gradient(180deg, var(--green), var(--amber));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .strip-stat .d {
+        margin-top: 10px;
+        font-size: 11px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      .proof-list {
+        margin-top: 56px;
+        display: grid;
+        gap: 1px;
+        background: var(--line);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        border: 1px solid var(--line-strong);
+      }
+
+      .proof-row {
+        display: grid;
+        grid-template-columns: 100px minmax(0, 1fr) 140px 110px;
+        gap: 18px;
+        align-items: center;
+        padding: 18px 22px;
+        background: rgba(11, 22, 18, 0.7);
+        backdrop-filter: blur(6px);
+      }
+
+      .proof-row.head {
+        background: rgba(11, 22, 18, 0.92);
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .proof-tag {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .proof-tag.done { color: var(--green); }
+      .proof-tag.live { color: var(--blue); }
+      .proof-tag.waiting { color: var(--amber); }
+
+      .proof-kind {
+        font-weight: 700;
+        color: var(--paper);
+      }
+
+      .proof-detail {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .proof-time {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--faint);
+      }
+
+      /* ── Scene 7: CTA ────────────────────────────────────── */
+      .cta-scene {
+        position: relative;
+        text-align: center;
+        padding: 140px 0 120px;
+      }
+
+      .cta-eyebrow {
+        justify-content: center;
+      }
+
+      .cta-headline {
+        margin: 22px auto 0;
+        max-width: 16ch;
+        font-family: var(--display);
+        font-size: clamp(56px, 9vw, 132px);
+        font-weight: 400;
+        line-height: 0.92;
+        letter-spacing: -0.02em;
+      }
+
+      .cta-headline em {
+        font-style: italic;
+        color: var(--green);
+      }
+
+      .cta-sub {
+        margin: 28px auto 0;
+        max-width: 540px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .cta-actions {
+        margin-top: 40px;
+        display: flex;
+        gap: 14px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .footer {
+        position: relative;
+        z-index: 1;
+        padding: 36px 28px;
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        flex-wrap: wrap;
+        color: var(--faint);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      /* ── Decrypt-scramble text ───────────────────────────── */
+      .decrypt {
+        display: inline-block;
+      }
+
+      /* ── Modal ───────────────────────────────────────────── */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        display: none;
+        place-items: center;
+        padding: 18px;
+        background: rgba(7, 13, 11, 0.78);
+        backdrop-filter: blur(10px);
+      }
+
+      .modal-overlay.open {
+        display: grid;
+      }
+
+      .modal-overlay.open .modal {
+        animation: modalIn 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      }
+
+      .modal {
+        width: min(480px, 100%);
+        padding: 28px;
+        border-radius: var(--radius-lg);
+        background: var(--paper);
+        color: var(--ink);
+        border: 1px solid var(--line-paper);
+        box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(98, 226, 168, 0.25),
+          0 0 60px rgba(98, 226, 168, 0.18);
+      }
+
+      .modal-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .modal-title {
+        font-family: var(--display);
+        font-size: 38px;
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+
+      .modal-sub {
+        margin-top: 6px;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+
+      .modal-close {
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--line-paper);
+        border-radius: 50%;
+        background: transparent;
+        color: var(--ink);
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.16s ease;
+      }
+
+      .modal-close:hover { background: rgba(0, 0, 0, 0.06); }
+
+      .input-label {
+        display: block;
+        margin-top: 24px;
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+
+      .input-wrap {
+        position: relative;
+        margin-top: 10px;
+      }
+
+      .amount-input {
+        width: 100%;
+        padding: 18px 90px 18px 18px;
+        font-family: var(--display);
+        font-size: 32px;
+        font-weight: 400;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+        background: rgba(0, 0, 0, 0.04);
+        border: 1px solid var(--line-paper);
+        border-radius: var(--radius);
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .amount-input:focus {
+        border-color: var(--green-deep);
+        box-shadow: 0 0 0 4px rgba(98, 226, 168, 0.18);
+      }
+
+      .input-token {
+        position: absolute;
+        top: 50%;
+        right: 18px;
+        transform: translateY(-50%);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: var(--faint);
+        text-transform: uppercase;
+      }
+
+      .modal-facts {
+        margin-top: 20px;
+        padding: 18px;
+        border-radius: var(--radius);
+        background: rgba(0, 0, 0, 0.04);
+        display: grid;
+        gap: 10px;
+      }
+
+      .modal-fact {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        font-size: 12px;
+      }
+
+      .modal-fact .k {
+        color: var(--faint);
+        letter-spacing: 0.08em;
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      .modal-fact .v { font-weight: 700; }
+      .modal-fact .v.green { color: var(--green-deep); }
+
+      .modal-btn {
+        width: 100%;
+        margin-top: 22px;
+        padding: 16px;
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--paper);
+        background: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 999px;
+        cursor: pointer;
+        transition: transform 0.16s ease, box-shadow 0.2s ease;
+      }
+
+      .modal-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+      }
+
+      .modal-btn.borrow {
+        background: var(--green-deep);
+        border-color: var(--green-deep);
+      }
+
+      .modal-btn.borrow:hover {
+        box-shadow: 0 18px 40px rgba(98, 226, 168, 0.4);
+      }
+
+      .modal-btn.loading {
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
+      /* ── Wallet picker ───────────────────────────────────── */
+      .wallet-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .wallet-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        border: 1px solid var(--line-paper);
+        background: rgba(0, 0, 0, 0.03);
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+        cursor: pointer;
+        transition: background 0.18s ease, border-color 0.18s ease;
+      }
+
+      .wallet-row:hover {
+        background: rgba(98, 226, 168, 0.1);
+        border-color: var(--green-deep);
+      }
+
+      .wallet-row[data-installed="false"] {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .wallet-row[data-installed="false"]:hover {
+        background: rgba(0, 0, 0, 0.03);
+        border-color: var(--line-paper);
+      }
+
+      .wallet-row .name {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .wallet-row .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--green-deep);
+        box-shadow: 0 0 8px rgba(31, 90, 71, 0.5);
+      }
+
+      .wallet-row[data-installed="false"] .dot {
+        background: var(--faint);
+        box-shadow: none;
+      }
+
+      .wallet-row .meta {
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+
+      .wallet-hint {
+        margin-top: 18px;
+        font-size: 11px;
+        line-height: 1.55;
+        color: var(--faint);
+      }
+
+      /* ── Claim CTA ───────────────────────────────────────── */
+      .claim-card {
+        margin-top: 20px;
+        padding: 18px;
+        border-radius: 14px;
+        background: linear-gradient(
+          135deg,
+          rgba(98, 226, 168, 0.18),
+          rgba(240, 179, 103, 0.08)
+        );
+        border: 1px solid rgba(31, 90, 71, 0.45);
+      }
+
+      .claim-card .label {
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--green-deep);
+        font-weight: 700;
+      }
+
+      .claim-card .headline {
+        margin-top: 8px;
+        font-family: var(--display);
+        font-size: 26px;
+        line-height: 1.05;
+        color: var(--ink);
+      }
+
+      .claim-card .sub {
+        margin-top: 6px;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--ink-soft);
+      }
+
+      .claim-card .actions {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .claim-btn {
+        padding: 11px 16px;
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        background: var(--green-deep);
+        color: var(--paper);
+        border: 1px solid var(--green-deep);
+        border-radius: 999px;
+        cursor: pointer;
+        transition: transform 0.16s ease, box-shadow 0.16s ease;
+      }
+
+      .claim-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 30px rgba(31, 90, 71, 0.3);
+      }
+
+      .claim-btn.loading {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .claim-card[data-state="pending"] {
+        background: rgba(240, 179, 103, 0.1);
+        border-color: rgba(240, 179, 103, 0.4);
+      }
+      .claim-card[data-state="pending"] .label {
+        color: #b27628;
+      }
+
+      .history-list {
+        margin-top: 18px;
+        display: grid;
+        gap: 8px;
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .history-row {
+        display: grid;
+        grid-template-columns: 80px 1fr auto;
+        gap: 12px;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px dashed var(--line-paper);
+        color: var(--ink-soft);
+      }
+
+      .history-row .kind {
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--green-deep);
+      }
+
+      .history-row .detail {
+        color: var(--faint);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .history-row .when {
+        color: var(--faint);
+        font-size: 10px;
+      }
+
+      /* ── Toast ───────────────────────────────────────────── */
+      .toast {
+        position: fixed;
+        right: 22px;
+        bottom: 22px;
+        z-index: 100;
+        display: none;
+        width: min(360px, calc(100vw - 44px));
+        padding: 16px 18px;
+        border-radius: var(--radius);
+        background: var(--paper);
+        color: var(--ink);
+        border: 1px solid rgba(98, 226, 168, 0.4);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5),
+          0 0 30px rgba(98, 226, 168, 0.18);
+      }
+
+      .toast.show {
+        display: block;
+        animation: toastIn 0.28s ease both;
+      }
+
+      .toast-title {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--green-deep);
+      }
+
+      .toast-msg {
+        margin-top: 6px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--ink-soft);
+      }
+
+      /* ── Anims ───────────────────────────────────────────── */
+      @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes modalIn {
+        from { opacity: 0; transform: translateY(20px) scale(0.97); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes toastIn {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .reveal {
+        opacity: 0;
+        transform: translateY(28px);
+        transition: opacity 0.9s cubic-bezier(0.2, 0.7, 0.2, 1),
+          transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+      }
+
+      .reveal.in {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .reveal[data-stagger="1"] { transition-delay: 0.06s; }
+      .reveal[data-stagger="2"] { transition-delay: 0.14s; }
+      .reveal[data-stagger="3"] { transition-delay: 0.22s; }
+      .reveal[data-stagger="4"] { transition-delay: 0.3s; }
+
+      /* ── Hover-only refinements (skip on touch) ──────────── */
+      @media (hover: none) {
+        .market-card:hover {
+          transform: none;
+          border-color: var(--line-strong);
+          box-shadow: none;
+        }
+        .market-card:hover::before { opacity: 0; }
+        .cta:hover,
+        .connect-btn:hover,
+        .modal-btn:hover,
+        .market-btn:hover,
+        .claim-btn:hover {
+          transform: none;
+          box-shadow: none;
+        }
+      }
+
+      /* ── Tablet ──────────────────────────────────────────── */
+      @media (max-width: 1100px) {
+        .hero,
+        .demo-grid,
+        .pos-grid {
+          grid-template-columns: 1fr;
+          gap: 28px;
+        }
+        .demo-arrow { display: none; }
+        .market-cards,
+        .flow-grid,
+        .stat-strip {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .flow-track { display: none; }
+        .scene-head { flex-direction: column; align-items: flex-start; gap: 18px; }
+      }
+
+      /* ── Phone ──────────────────────────────────────────── */
+      @media (max-width: 720px) {
+        :root { --radius-lg: 18px; }
+        body { -webkit-text-size-adjust: 100%; }
+
+        .topbar {
+          flex-direction: column;
+          align-items: stretch;
+          padding: 12px 16px;
+          padding-top: max(12px, env(safe-area-inset-top));
+          gap: 12px;
+        }
+
+        .brand-name { font-size: 22px; }
+        .brand-sub { font-size: 9px; }
+
+        .top-links {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 6px;
+        }
+
+        .top-link {
+          min-height: 44px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 10px;
+          font-size: 11px;
+        }
+
+        .connect-btn {
+          min-height: 48px;
+          min-width: 0;
+          padding: 12px 16px;
+          font-size: 12px;
+          grid-column: 1 / -1;
+        }
+
+        .wrap {
+          width: min(100% - 28px, 1180px);
+        }
+
+        .scene {
+          min-height: 0;
+          padding: 56px 0 48px;
+        }
+        .scene-num {
+          right: 14px;
+          top: 18px;
+          font-size: 9px;
+          letter-spacing: 0.22em;
+        }
+
+        h1.headline {
+          font-size: clamp(48px, 14vw, 84px);
+          line-height: 0.94;
+          letter-spacing: -0.02em;
+        }
+        .headline em,
+        .headline .ghost { display: inline; }
+
+        .hero-copy { font-size: 14px; }
+
+        .scene-title {
+          font-size: clamp(32px, 8vw, 52px);
+          max-width: 100%;
+        }
+
+        .stat-val { font-size: 22px; }
+        .stat-val.small { font-size: 16px; }
+
+        .market-cards,
+        .flow-grid,
+        .stat-strip { grid-template-columns: 1fr; }
+
+        .market-card { padding: 22px; }
+        .market-name { font-size: 30px; }
+        .market-metrics { gap: 14px 12px; }
+        .market-metric .v { font-size: 20px; }
+
+        .market-btn,
+        .claim-btn {
+          min-height: 44px;
+          padding: 12px 14px;
+          font-size: 11px;
+        }
+
+        .flow-step { padding: 22px 20px; }
+        .flow-num { width: 52px; height: 52px; font-size: 24px; }
+
+        .strip-stat .v { font-size: clamp(34px, 12vw, 56px); }
+
+        .proof-list { border-radius: 14px; }
+        .proof-row {
+          grid-template-columns: 72px minmax(0, 1fr) 56px;
+          padding: 14px 16px;
+          gap: 12px;
+        }
+        .proof-row.head > :nth-child(3),
+        .proof-row > :nth-child(3) {
+          display: none;
+        }
+        .proof-row.head > :last-child { text-align: right; }
+        .proof-detail { font-size: 11px; }
+
+        .pos-card { padding: 22px; }
+        .pos-headline { font-size: 28px; }
+        .pos-val { font-size: 20px; }
+
+        .gauge svg { width: 180px; height: 180px; }
+        .gauge-num .v { font-size: 38px; }
+
+        .cta {
+          min-height: 48px;
+          padding: 14px 18px;
+          font-size: 11px;
+        }
+
+        .cta-scene { padding: 80px 0 64px; }
+        .cta-headline { font-size: clamp(40px, 12vw, 84px); }
+
+        .modal {
+          padding: 22px 20px;
+          border-radius: 18px;
+        }
+        .modal-title { font-size: 28px; }
+        .modal-close {
+          width: 40px;
+          height: 40px;
+          font-size: 18px;
+        }
+        .amount-input { font-size: 26px; padding: 16px 80px 16px 14px; }
+        .modal-btn {
+          min-height: 50px;
+          font-size: 11px;
+        }
+
+        .wallet-row {
+          min-height: 56px;
+          padding: 14px 16px;
+        }
+
+        .footer {
+          padding: 28px 18px;
+          padding-bottom: max(28px, env(safe-area-inset-bottom));
+          flex-direction: column;
+          gap: 8px;
+          font-size: 10px;
+        }
+
+        .toast {
+          right: 12px;
+          bottom: max(12px, env(safe-area-inset-bottom));
+          padding: 14px;
+        }
+
+        /* Save the battery: cipher rain is decorative, kill it on phones */
+        #cipherCanvas { display: none; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+        }
+        .reveal { opacity: 1; transform: none; }
+        #cipherCanvas { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="cipherCanvas"></canvas>
+    <div class="vignette"></div>
+    <div class="progress" id="progress"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div>
+          <div class="brand-name">ShadowLend</div>
+          <div class="brand-sub">Private credit · Solana × Arcium</div>
         </div>
       </div>
+      <nav class="top-links" aria-label="Page sections">
+        <a class="top-link" href="#markets">Markets</a>
+        <a class="top-link" href="#flow">How</a>
+        <a class="top-link" href="#position">Position</a>
+        <a class="top-link" href="#activity">Activity</a>
+        <button class="connect-btn" id="connectBtn" onclick="onConnectButton()">
+          Connect wallet
+        </button>
+      </nav>
+    </header>
 
-      <div class="flow-section">
-        <div class="section-label">How Arcium Protects Your Position</div>
-        <div class="flow-diagram">
-          <div class="flow-nodes">
-            <div class="flow-node">
-              <div class="flow-node-icon">👤</div>
-              <div class="flow-node-title">You</div>
-              <div class="flow-node-desc">Encrypt amount<br>with MXE pubkey</div>
+    <main>
+      <!-- ─── SCENE 01 — HERO ─────────────────────────────── -->
+      <section class="scene" id="hero">
+        <div class="scene-num">01 / 07 — INTRO</div>
+        <div class="wrap hero">
+          <div class="hero-text reveal">
+            <div class="eyebrow">Private credit · simple flow</div>
+            <h1 class="headline">
+              Credit, <em>hidden</em><br />
+              in plain <span class="ghost">sight.</span>
+            </h1>
+            <p class="hero-copy">
+              ShadowLend lets you supply collateral and borrow on Solana while
+              your exact balances stay private. Amounts are encrypted in your
+              browser, verified through Arcium's MXE proof path, then settled
+              on-chain as ciphertext.
+            </p>
+            <div class="hero-actions">
+              <a class="cta" href="#markets">
+                Open markets <span class="arrow">→</span>
+              </a>
+              <a class="cta ghost" href="#flow">
+                See proof flow <span class="arrow">→</span>
+              </a>
             </div>
-            <div class="flow-arrow">→<div class="flow-arrow-label">ciphertext</div></div>
-            <div class="flow-node">
-              <div class="flow-node-icon">⛓️</div>
-              <div class="flow-node-title">Solana Chain</div>
-              <div class="flow-node-desc">Stores encrypted<br>state only</div>
+          </div>
+
+          <aside class="hero-card reveal" data-stagger="2">
+            <div class="hero-card-head">
+              <span class="key">Live market</span>
+              <span class="live"><span class="pulse-dot"></span>devnet · live</span>
             </div>
-            <div class="flow-arrow">↔<div class="flow-arrow-label">ZK proof</div></div>
-            <div class="flow-node arcium">
-              <div class="flow-node-icon">🔮</div>
-              <div class="flow-node-title">Arcium MXE</div>
-              <div class="flow-node-desc">LTV / health / interest<br>computed in MPC</div>
+            <div class="stat">
+              <span class="stat-key">Total supplied</span>
+              <span class="stat-val" data-countup="84.2" data-suffix="M">$0M</span>
             </div>
-            <div class="flow-arrow">→<div class="flow-arrow-label">bool proof</div></div>
-            <div class="flow-node">
-              <div class="flow-node-icon">✅</div>
-              <div class="flow-node-title">Verifier</div>
-              <div class="flow-node-desc">Confirms result<br>without seeing data</div>
+            <div class="stat">
+              <span class="stat-key">Total borrowed</span>
+              <span class="stat-val" data-countup="51.7" data-suffix="M">$0M</span>
+            </div>
+            <div class="stat">
+              <span class="stat-key">Proofs / 24h</span>
+              <span class="stat-val green" data-countup="12831" data-int="1">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-key">Privacy path</span>
+              <span class="stat-val small green">MXE + ElGamal</span>
+            </div>
+            <div class="cipher-line">
+              <span class="tag">Last settled ciphertext</span>
+              <span id="heroCipher">0x8f3a c4b2 7e91 d68a 4f02 ab37 9c1d 0e44</span>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ─── SCENE 02 — CIPHER ──────────────────────────── -->
+      <section class="scene" id="cipher">
+        <div class="scene-num">02 / 07 — ENCRYPTION</div>
+        <div class="wrap">
+          <div class="scene-head reveal">
+            <div>
+              <div class="eyebrow">02 · Live cipher</div>
+              <h2 class="scene-title">
+                Your amount never <em>leaves</em> the browser.
+              </h2>
+            </div>
+            <p class="scene-copy">
+              Drag the slider. Watch a plain number become a ciphertext block
+              before it ever touches the network. Only a yes/no proof reaches
+              the chain never your balance.
+            </p>
+          </div>
+
+          <div class="demo-grid">
+            <div class="demo-card paper reveal" data-stagger="1">
+              <div class="demo-label">Plaintext — local only</div>
+              <div class="demo-amount">
+                <span id="demoNum">2,400</span>
+                <span class="unit">USDC</span>
+              </div>
+              <div class="demo-slider">
+                <input
+                  type="range"
+                  id="demoSlider"
+                  min="50"
+                  max="25000"
+                  step="50"
+                  value="2400"
+                />
+              </div>
+              <p class="demo-hint">
+                Live in memory. Re-encrypted on every keystroke. Never logged,
+                never broadcast, never persisted.
+              </p>
+            </div>
+
+            <div class="demo-arrow reveal" data-stagger="2" aria-hidden="true">
+              <svg viewBox="0 0 100 80" fill="none">
+                <defs>
+                  <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="rgba(98,226,168,0)" />
+                    <stop offset="50%" stop-color="rgba(98,226,168,0.9)" />
+                    <stop offset="100%" stop-color="rgba(98,226,168,0)" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M5 40 L85 40"
+                  stroke="url(#arrowGrad)"
+                  stroke-width="2"
+                />
+                <path
+                  d="M75 28 L92 40 L75 52"
+                  stroke="rgba(98,226,168,0.9)"
+                  stroke-width="2"
+                  fill="none"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <circle cx="14" cy="40" r="3" fill="rgba(98,226,168,1)">
+                  <animate
+                    attributeName="cx"
+                    values="14;82;14"
+                    dur="2.6s"
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="opacity"
+                    values="0;1;0"
+                    dur="2.6s"
+                    repeatCount="indefinite"
+                  />
+                </circle>
+              </svg>
+            </div>
+
+            <div class="demo-card reveal" data-stagger="3">
+              <div class="demo-label">Ciphertext what the chain sees</div>
+              <div class="demo-cipher" id="demoCipher"></div>
+              <div class="demo-foot">
+                <span><span class="dot"></span>ElGamal · Curve25519</span>
+                <span><span class="dot"></span>MXE-verified</span>
+              </div>
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- ─── SCENE 03 — MARKETS ─────────────────────────── -->
+      <section class="scene" id="markets">
+        <div class="scene-num">03 / 07 — MARKETS</div>
+        <div class="wrap">
+          <div class="scene-head reveal">
+            <div>
+              <div class="eyebrow">03 · Choose a market</div>
+              <h2 class="scene-title">
+                Three rails. <em>Same</em> private settlement.
+              </h2>
+            </div>
+            <p class="scene-copy">
+              Tap a market to inspect its risk settings. Supply and borrow both
+              issue private action tickets that hit Arcium first, then land
+              on-chain as ciphertext.
+            </p>
+          </div>
+
+          <div class="market-cards" id="marketCards"></div>
+        </div>
+      </section>
+
+      <!-- ─── SCENE 04 — PROOF FLOW ──────────────────────── -->
+      <section class="scene" id="flow">
+        <div class="scene-num">04 / 07 — PROOF FLOW</div>
+        <div class="wrap">
+          <div class="scene-head reveal">
+            <div>
+              <div class="eyebrow">04 · How a borrow clears</div>
+              <h2 class="scene-title">
+                Four steps. <em>Zero</em> balance leaks.
+              </h2>
+            </div>
+            <p class="scene-copy">
+              Your number flows through encryption, secure compute, a yes/no
+              proof, and on-chain settlement and at every step, only a
+              ciphertext or a boolean is visible.
+            </p>
+          </div>
+
+          <div class="flow">
+            <div class="flow-track" aria-hidden="true"></div>
+            <div class="flow-grid">
+              <div class="flow-step reveal" data-stagger="1">
+                <div class="flow-num">1</div>
+                <div class="flow-title">Encrypt locally</div>
+                <p class="flow-copy">
+                  Your amount is encrypted in the browser before any request
+                  fires. The plain number never crosses the wire.
+                </p>
+                <span class="flow-tag">browser</span>
+              </div>
+              <div class="flow-step reveal" data-stagger="2">
+                <div class="flow-num">2</div>
+                <div class="flow-title">MXE computes</div>
+                <p class="flow-copy">
+                  Arcium's private compute layer checks the rule LTV bound,
+                  health factor, supply cap on the ciphertext.
+                </p>
+                <span class="flow-tag">arcium</span>
+              </div>
+              <div class="flow-step reveal" data-stagger="3">
+                <div class="flow-num">3</div>
+                <div class="flow-title">Return a proof</div>
+                <p class="flow-copy">
+                  Only the boolean result is published. The program sees
+                  whether the action is valid, never your underlying balance.
+                </p>
+                <span class="flow-tag">proof</span>
+              </div>
+              <div class="flow-step reveal" data-stagger="4">
+                <div class="flow-num">4</div>
+                <div class="flow-title">Settle on Solana</div>
+                <p class="flow-copy">
+                  The position is updated using ciphertext and proof refs.
+                  Public state never reveals the size of your position.
+                </p>
+                <span class="flow-tag">solana</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SCENE 05 — POSITION ────────────────────────── -->
+      <section class="scene" id="position">
+        <div class="scene-num">05 / 07 — POSITION</div>
+        <div class="wrap">
+          <div class="scene-head reveal">
+            <div>
+              <div class="eyebrow">05 · Track your position</div>
+              <h2 class="scene-title">
+                Read locally. <em>Prove</em> globally.
+              </h2>
+            </div>
+            <p class="scene-copy">
+              A connected wallet decrypts position state in-browser. The chain
+              keeps an encrypted ledger; you keep the readable one.
+            </p>
+          </div>
+
+          <div class="pos-grid">
+            <section class="pos-card paper reveal" data-stagger="1" id="posCard">
+              <div class="pos-headline">Your position</div>
+              <div id="positionBody" class="empty">
+                Connect a wallet to load your on-chain stats and claim test
+                tokens.
+                <br /><br />
+                <span class="cta-link" onclick="onConnectButton()"
+                  >→ Connect now</span
+                >
+              </div>
+            </section>
+
+            <aside class="pos-card reveal" data-stagger="2">
+              <div class="pos-headline" style="font-size: 24px">
+                Health factor
+              </div>
+              <div class="gauge">
+                <svg viewBox="0 0 200 200">
+                  <defs>
+                    <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="#62e2a8" />
+                      <stop offset="100%" stop-color="#f0b367" />
+                    </linearGradient>
+                  </defs>
+                  <circle
+                    cx="100"
+                    cy="100"
+                    r="84"
+                    stroke="rgba(244,234,216,0.08)"
+                    stroke-width="14"
+                    fill="none"
+                  />
+                  <circle
+                    id="gaugeArc"
+                    cx="100"
+                    cy="100"
+                    r="84"
+                    stroke="url(#gaugeGrad)"
+                    stroke-width="14"
+                    fill="none"
+                    stroke-linecap="round"
+                    stroke-dasharray="528"
+                    stroke-dashoffset="528"
+                    transform="rotate(-90 100 100)"
+                    style="
+                      filter: drop-shadow(0 0 12px rgba(98, 226, 168, 0.5));
+                      transition: stroke-dashoffset 1.4s
+                        cubic-bezier(0.2, 0.7, 0.2, 1);
+                    "
+                  />
+                </svg>
+                <div class="gauge-num">
+                  <span class="v" id="gaugeVal">—</span>
+                  <span class="l">computed locally</span>
+                </div>
+              </div>
+              <p class="empty" style="margin-top: 4px; text-align: center">
+                Below 1.0 the position can be liquidated by anyone, using a
+                public proof but private balances.
+              </p>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SCENE 06 — ACTIVITY ────────────────────────── -->
+      <section class="scene" id="activity">
+        <div class="scene-num">06 / 07 — ACTIVITY</div>
+        <div class="wrap">
+          <div class="scene-head reveal">
+            <div>
+              <div class="eyebrow">06 · Live proof stream</div>
+              <h2 class="scene-title">
+                The network hums in <em>ciphertext.</em>
+              </h2>
+            </div>
+            <p class="scene-copy">
+              Every supply, borrow, repay and liquidation flows through a
+              proof. The public sees references and outcomes, never amounts.
+            </p>
+          </div>
+
+          <div class="stat-strip reveal" data-stagger="2">
+            <div class="strip-stat">
+              <div class="k">Proofs settled</div>
+              <div class="v glow" data-countup="48211" data-int="1">0</div>
+              <div class="d">All-time, across SOL · USDC · WBTC markets.</div>
+            </div>
+            <div class="strip-stat">
+              <div class="k">Median proof time</div>
+              <div class="v" data-countup="1.42" data-suffix="s">0s</div>
+              <div class="d">Local encryption + MXE compute round-trip.</div>
+            </div>
+            <div class="strip-stat">
+              <div class="k">Active markets</div>
+              <div class="v" data-countup="3" data-int="1">0</div>
+              <div class="d">More private rails coming this season.</div>
+            </div>
+            <div class="strip-stat">
+              <div class="k">Balance leaks</div>
+              <div class="v glow" data-countup="0" data-int="1">0</div>
+              <div class="d">Zero. That's the whole point.</div>
+            </div>
+          </div>
+
+          <div class="proof-list reveal" data-stagger="3">
+            <div class="proof-row head">
+              <span>Status</span>
+              <span>Kind / Reference</span>
+              <span>Market</span>
+              <span style="text-align: right">Time</span>
+            </div>
+            <div id="proofList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SCENE 07 — CTA ─────────────────────────────── -->
+      <section class="scene cta-scene" id="join">
+        <div class="scene-num">07 / 07 — ENTER</div>
+        <div class="wrap">
+          <div class="reveal">
+            <div class="eyebrow cta-eyebrow">Enter the shadow</div>
+            <h2 class="cta-headline">
+              Borrow without <em>broadcasting.</em>
+            </h2>
+            <p class="cta-sub">
+              Private lending on Solana, settled through Arcium's MXE proof
+              path. Connect a wallet, claim test tokens, and open the flow.
+            </p>
+            <div class="cta-actions">
+              <button class="cta" onclick="onConnectButton()">
+                Connect wallet <span class="arrow">→</span>
+              </button>
+              <a class="cta ghost" href="#flow">
+                Read the proof flow <span class="arrow">→</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>© ShadowLend prototype · 2026</span>
+      <span>Solana · Arcium MXE · ElGamal Curve25519</span>
+    </footer>
+
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-title" id="modalTitle">Supply SOL</div>
+            <div class="modal-sub">Amount is encrypted locally first</div>
+          </div>
+          <button
+            class="modal-close"
+            onclick="document.getElementById('modalOverlay').classList.remove('open')"
+          >
+            ×
+          </button>
+        </div>
+        <label class="input-label" for="amountInput">Amount</label>
+        <div class="input-wrap">
+          <input
+            class="amount-input"
+            id="amountInput"
+            type="number"
+            placeholder="0.00"
+            inputmode="decimal"
+          />
+          <span class="input-token" id="inputToken">SOL</span>
+        </div>
+        <div class="modal-facts">
+          <div class="modal-fact">
+            <span class="k">Encryption</span>
+            <span class="v green">ElGamal → MXE</span>
+          </div>
+          <div class="modal-fact">
+            <span class="k">Rule checked</span>
+            <span class="v" id="modalConstraint">LTV within threshold</span>
+          </div>
+          <div class="modal-fact">
+            <span class="k">On-chain state</span>
+            <span class="v">Ciphertext only</span>
+          </div>
+        </div>
+        <button
+          class="modal-btn"
+          id="modalBtn"
+          onclick="submitTransaction()"
+        >
+          <span id="modalBtnText">Supply SOL</span>
+        </button>
       </div>
     </div>
 
-    <div class="sidebar">
-      <div class="privacy-panel">
-        <div class="privacy-header">
-          <div class="shield-icon">🛡️</div>
-          <div><div class="privacy-title">Arcium Privacy Status</div></div>
-        </div>
-        <div class="privacy-items">
-          <div class="privacy-item">
-            <div class="privacy-dot"></div>
-            <div class="privacy-text"><strong>Collateral amounts</strong> encrypted via ElGamal — invisible on-chain</div>
+    <div
+      class="modal-overlay"
+      id="walletOverlay"
+      onclick="closeWalletPicker(event)"
+    >
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-title">Connect a wallet</div>
+            <div class="modal-sub">Solflare · Phantom · Backpack</div>
           </div>
-          <div class="privacy-item">
-            <div class="privacy-dot accent"></div>
-            <div class="privacy-text"><strong>LTV checked</strong> inside Arcium MPC — only a boolean proof goes on-chain</div>
-          </div>
-          <div class="privacy-item">
-            <div class="privacy-dot cyan"></div>
-            <div class="privacy-text"><strong>Health factors</strong> never published — liquidators must prove via MXE</div>
-          </div>
-          <div class="privacy-item">
-            <div class="privacy-dot"></div>
-            <div class="privacy-text"><strong>Interest accrual</strong> runs on encrypted balances</div>
-          </div>
+          <button
+            class="modal-close"
+            onclick="document.getElementById('walletOverlay').classList.remove('open')"
+          >
+            ×
+          </button>
         </div>
-      </div>
-
-      <div class="position-panel" id="positionPanel">
-        <div class="pos-header">
-          <div class="pos-title">Your Position</div>
-          <div class="encrypted-badge"><div class="enc-dot"></div>ENCRYPTED</div>
-        </div>
-        <div class="pos-body" id="positionBody">
-          <div style="text-align:center;padding:24px 0;color:var(--muted2);font-size:13px;">Connect wallet to view your encrypted position</div>
-        </div>
+        <div id="walletList" class="wallet-list"></div>
+        <p class="wallet-hint">
+          ShadowLend runs on Solana devnet. Your wallet should be set to devnet
+          to interact with the faucet.
+        </p>
       </div>
     </div>
-  </div>
-</main>
 
-<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
-  <div class="modal">
-    <button class="modal-close" onclick="closeModal()">✕</button>
-    <div class="modal-title" id="modalTitle">Supply Collateral</div>
-    <div class="modal-sub">Amounts are encrypted before leaving your browser</div>
-    <div class="input-group">
-      <label class="input-label">Amount</label>
-      <div class="input-wrap">
-        <input class="amount-input" id="amountInput" type="number" placeholder="0.00" />
-        <span class="input-token" id="inputToken">SOL</span>
+    <div class="toast" id="toast">
+      <div class="toast-title" id="toastTitle">Proof job queued</div>
+      <div class="toast-msg" id="toastMsg">
+        Private settlement job staged.
       </div>
     </div>
-    <div class="info-rows">
-      <div class="info-row"><span class="info-key">Encryption</span><span class="info-val" style="color:var(--accent)">ElGamal → MXE</span></div>
-      <div class="info-row"><span class="info-key">Stored on-chain</span><span class="info-val" style="color:var(--accent)">Ciphertext only</span></div>
-    </div>
-    <div class="arcium-notice">
-      <div class="arcium-notice-icon">🔮</div>
-      <div class="arcium-notice-text"><strong>Arcium MXE</strong> verifies your LTV inside multi-party computation. Your exact balance is never revealed on-chain.</div>
-    </div>
-    <button class="modal-btn" id="modalBtn" onclick="submitTransaction()">
-      <span id="modalBtnText">Supply SOL</span>
-    </button>
-  </div>
-</div>
 
-<div class="toast" id="toast">
-  <div class="toast-title" id="toastTitle">✓ Transaction Confirmed</div>
-  <div class="toast-msg" id="toastMsg">Encrypted ciphertext stored on-chain</div>
-</div>
+    <script type="module" src="./sl-client.js"></script>
+    <script>
+      // ── Data ────────────────────────────────────────────
+      const markets = [
+        {
+          id: "SOL",
+          name: "Solana",
+          sub: "Native collateral",
+          mark: "sol",
+          supply: "3.42%",
+          borrow: "5.18%",
+          liquidity: "$28.4M",
+          ltv: "80%",
+          oracle: "Pyth SOL/USD",
+          reserve: "12%",
+          threshold: "86%",
+          spark: [22, 26, 24, 29, 28, 34, 31, 38, 36, 41, 39, 45],
+          copy: "Native collateral market with private LTV checks through the MXE proof path.",
+        },
+        {
+          id: "USDC",
+          name: "USD Coin",
+          sub: "Stable borrow leg",
+          mark: "usdc",
+          supply: "5.71%",
+          borrow: "7.83%",
+          liquidity: "$31.8M",
+          ltv: "85%",
+          oracle: "Pyth USDC/USD",
+          reserve: "8%",
+          threshold: "90%",
+          spark: [40, 38, 41, 42, 39, 43, 44, 41, 45, 46, 44, 47],
+          copy: "Stable asset market for debt and liquidity management with encrypted position accounting.",
+        },
+        {
+          id: "WBTC",
+          name: "Wrapped Bitcoin",
+          sub: "Conservative collateral",
+          mark: "wbtc",
+          supply: "1.94%",
+          borrow: "3.27%",
+          liquidity: "$18.6M",
+          ltv: "75%",
+          oracle: "Pyth BTC/USD",
+          reserve: "15%",
+          threshold: "82%",
+          spark: [30, 32, 31, 35, 34, 33, 36, 38, 37, 40, 39, 42],
+          copy: "Lower-LTV collateral market for larger positions and conservative private borrowing.",
+        },
+      ];
 
-<script>
-  let connected = false;
-  let currentAction = 'deposit';
-  let currentAsset = 'SOL';
+      const proofJobs = [
+        ["done", "LTV check", "SOL borrow · 0x8f3a…a4e2", "SOL", "00:02"],
+        ["live", "Health factor", "0x76c1…a4e2", "USDC", "00:08"],
+        ["waiting", "Interest accrual", "USDC reserve sweep", "USDC", "00:14"],
+      ];
 
-  function toggleConnect() {
-    connected = !connected;
-    const btn = document.getElementById('connectBtn');
-    if (connected) {
-      btn.textContent = '◎ 7xKp…3Rqm';
-      btn.classList.add('connected');
-      document.getElementById('positionBody').innerHTML = `
-        <div class="pos-row">
-          <div><div class="pos-label">Collateral</div></div>
-          <div><div class="pos-val">8.20 SOL</div><div class="pos-ct">0x4a8f…c2e1 | 0x9b3d…f841</div></div>
-        </div>
-        <div class="pos-row">
-          <div><div class="pos-label">Borrowed</div></div>
-          <div><div class="pos-val">$612 USDC</div><div class="pos-ct">0x12ca…7f90 | 0x8a21…e334</div></div>
-        </div>
-        <div class="pos-row">
-          <div><div class="pos-label">Health Factor</div></div>
-          <div><div class="pos-val" style="color:var(--green)">1.91</div><div class="pos-ct">computed by Arcium MXE</div></div>
-        </div>
-        <div class="health-bar-wrap"><div class="health-bar" style="width:62%"></div></div>
-        <button class="decrypt-btn" onclick="showToast('🔓 Decrypted Locally','Visible only in your browser')">🔓 Decrypt Balances (local)</button>
-      `;
-    } else {
-      btn.textContent = 'Connect Wallet';
-      btn.classList.remove('connected');
-      document.getElementById('positionBody').innerHTML = '<div style="text-align:center;padding:24px 0;color:var(--muted2);font-size:13px;">Connect wallet to view your encrypted position</div>';
-    }
-  }
+      const state = {
+        wallet: null,
+        receipt: null,
+        stats: null,
+        balance: null,
+        faucetReady: null, // null = not probed, true = deployed, false = not deployed
+      };
+      let selectedMarket = markets[0];
+      let currentAction = "deposit";
 
-  function openModal(action, asset) {
-    if (!connected) { showToast('⚠️ Connect Wallet', 'Please connect your wallet first'); return; }
-    currentAction = action; currentAsset = asset;
-    document.getElementById('modalTitle').textContent = action === 'deposit' ? `Supply ${asset}` : `Borrow ${asset}`;
-    document.getElementById('inputToken').textContent = asset;
-    document.getElementById('modalBtn').className = 'modal-btn' + (action === 'borrow' ? ' modal-btn-cyan' : '');
-    document.getElementById('modalBtnText').textContent = action === 'deposit' ? `Supply ${asset}` : `Borrow ${asset}`;
-    document.getElementById('modalOverlay').classList.add('open');
-  }
+      const KNOWN_WALLETS = [
+        { id: "solflare", label: "Solflare", check: () => window.solflare?.isSolflare },
+        { id: "phantom", label: "Phantom", check: () => window.phantom?.solana?.isPhantom },
+        { id: "backpack", label: "Backpack", check: () => window.backpack?.isBackpack },
+      ];
 
-  function closeModal(e) {
-    if (!e || e.target === document.getElementById('modalOverlay') || e.currentTarget.tagName === 'BUTTON') {
-      document.getElementById('modalOverlay').classList.remove('open');
-    }
-  }
+      // ── Cipher rain canvas ──────────────────────────────
+      (function cipherRain() {
+        const canvas = document.getElementById("cipherCanvas");
+        if (!canvas) return;
 
-  async function submitTransaction() {
-    const btn = document.getElementById('modalBtn');
-    const btnText = document.getElementById('modalBtnText');
-    const amount = document.getElementById('amountInput').value;
-    if (!amount || amount <= 0) { showToast('⚠️ Invalid Amount', 'Please enter a valid amount'); return; }
-    btn.classList.add('loading');
-    btnText.textContent = '🔒 Encrypting...'; await sleep(800);
-    btnText.textContent = '🔮 Submitting to MXE...'; await sleep(1200);
-    btnText.textContent = '⏳ Awaiting ZK Proof...'; await sleep(1500);
-    btnText.textContent = '📡 Sending tx...'; await sleep(700);
-    btn.classList.remove('loading');
-    btnText.textContent = currentAction === 'deposit' ? `Supply ${currentAsset}` : `Borrow ${currentAsset}`;
-    document.getElementById('modalOverlay').classList.remove('open');
-    showToast('✓ Transaction Confirmed', `${amount} ${currentAsset} — encrypted ciphertext stored on Solana`);
-  }
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)"
+        ).matches;
+        // Skip the canvas entirely on small screens and when the user has
+        // asked for reduced motion — it's decoration, not content.
+        if (reducedMotion || window.innerWidth < 720) {
+          canvas.remove();
+          return;
+        }
 
-  function showToast(title, msg) {
-    const t = document.getElementById('toast');
-    document.getElementById('toastTitle').textContent = title;
-    document.getElementById('toastMsg').textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 4000);
-  }
+        const ctx = canvas.getContext("2d");
+        let cols, drops, raf, paused = false;
+        const chars = "0123456789abcdef·∎◇◆∘";
 
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-</script>
-</body>
+        function size() {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+          cols = Math.floor(canvas.width / 22);
+          drops = Array(cols).fill(0).map(() => Math.random() * canvas.height);
+        }
+        size();
+        window.addEventListener("resize", size);
+
+        // Pause when the tab is in the background.
+        document.addEventListener("visibilitychange", () => {
+          paused = document.hidden;
+          if (!paused) raf = requestAnimationFrame(tick);
+        });
+
+        function tick() {
+          if (paused) return;
+          ctx.fillStyle = "rgba(7, 13, 11, 0.08)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.font = "12px IBM Plex Mono, monospace";
+          for (let i = 0; i < cols; i++) {
+            const c = chars[Math.floor(Math.random() * chars.length)];
+            const x = i * 22;
+            const y = drops[i];
+            const alpha = 0.06 + Math.random() * 0.18;
+            ctx.fillStyle = `rgba(98, 226, 168, ${alpha})`;
+            ctx.fillText(c, x, y);
+            if (y > canvas.height && Math.random() > 0.985) drops[i] = 0;
+            else drops[i] = y + 22;
+          }
+          raf = requestAnimationFrame(tick);
+        }
+        raf = requestAnimationFrame(tick);
+      })();
+
+      // ── Markets render ──────────────────────────────────
+      function sparkPath(values, w = 240, h = 56) {
+        const min = Math.min(...values),
+          max = Math.max(...values),
+          range = max - min || 1;
+        const step = w / (values.length - 1);
+        return values
+          .map((v, i) => {
+            const x = i * step;
+            const y = h - ((v - min) / range) * (h - 6) - 3;
+            return `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+          })
+          .join(" ");
+      }
+
+      function renderMarkets() {
+        const container = document.getElementById("marketCards");
+        container.innerHTML = markets
+          .map((m, i) => {
+            const path = sparkPath(m.spark);
+            const isSel = m.id === selectedMarket.id;
+            return `
+            <article
+              class="market-card reveal ${isSel ? "selected" : ""}"
+              data-stagger="${i + 1}"
+              data-id="${m.id}"
+              onclick="selectMarket('${m.id}')"
+            >
+              <div class="market-head">
+                <div class="asset-mark ${m.mark}">${m.id === "USDC" ? "USD" : m.id.replace("W", "")}</div>
+                <div class="market-tag">Max LTV · ${m.ltv}</div>
+              </div>
+              <div class="market-name">${m.name}</div>
+              <div class="market-sub">${m.sub} · ${m.oracle}</div>
+              <div class="market-spark">
+                <svg viewBox="0 0 240 56" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="sg-${m.id}" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="rgba(98,226,168,0.4)" />
+                      <stop offset="100%" stop-color="rgba(98,226,168,0)" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d="${path} L240 56 L0 56 Z"
+                    fill="url(#sg-${m.id})"
+                  />
+                  <path
+                    d="${path}"
+                    fill="none"
+                    stroke="rgba(98,226,168,0.9)"
+                    stroke-width="1.5"
+                  />
+                </svg>
+              </div>
+              <div class="market-metrics">
+                <div class="market-metric">
+                  <div class="k">Supply APY</div>
+                  <div class="v green">${m.supply}</div>
+                </div>
+                <div class="market-metric">
+                  <div class="k">Borrow APR</div>
+                  <div class="v amber">${m.borrow}</div>
+                </div>
+                <div class="market-metric">
+                  <div class="k">Liquidity</div>
+                  <div class="v">${m.liquidity}</div>
+                </div>
+                <div class="market-metric">
+                  <div class="k">Reserve</div>
+                  <div class="v">${m.reserve}</div>
+                </div>
+              </div>
+              <div class="market-actions">
+                <button class="market-btn" onclick="openModal(event, 'deposit', '${m.id}')">Supply</button>
+                <button class="market-btn borrow" onclick="openModal(event, 'borrow', '${m.id}')">Borrow</button>
+              </div>
+            </article>
+            `;
+          })
+          .join("");
+
+        // Re-attach reveal observer to new cards
+        container
+          .querySelectorAll(".reveal")
+          .forEach((el) => revealObserver.observe(el));
+
+        // Hover tilt-glow
+        container.querySelectorAll(".market-card").forEach((card) => {
+          card.addEventListener("mousemove", (e) => {
+            const r = card.getBoundingClientRect();
+            card.style.setProperty("--mx", `${((e.clientX - r.left) / r.width) * 100}%`);
+            card.style.setProperty("--my", `${((e.clientY - r.top) / r.height) * 100}%`);
+          });
+        });
+      }
+
+      function selectMarket(id) {
+        selectedMarket = markets.find((m) => m.id === id) || markets[0];
+        document
+          .querySelectorAll(".market-card")
+          .forEach((c) =>
+            c.classList.toggle("selected", c.dataset.id === id)
+          );
+      }
+
+      function renderProofs() {
+        document.getElementById("proofList").innerHTML = proofJobs
+          .map(
+            ([status, kind, detail, market, time]) => `
+            <div class="proof-row">
+              <span class="proof-tag ${status}">● ${status}</span>
+              <div>
+                <div class="proof-kind">${kind}</div>
+                <div class="proof-detail">${detail}</div>
+              </div>
+              <span class="proof-detail">${market}</span>
+              <span class="proof-time" style="text-align:right">${time}</span>
+            </div>`
+          )
+          .join("");
+      }
+
+      // ── Wallet picker + connect ─────────────────────────
+      function shortAddress(pk) {
+        const s = pk.toString();
+        return `${s.slice(0, 4)}…${s.slice(-4)}`;
+      }
+
+      function onConnectButton() {
+        if (state.wallet) {
+          disconnectWallet();
+          return;
+        }
+        pickWallet();
+      }
+
+      function pickWallet() {
+        const list = document.getElementById("walletList");
+        list.innerHTML = KNOWN_WALLETS.map((w) => {
+          const installed = !!w.check();
+          return `
+            <div
+              class="wallet-row"
+              data-installed="${installed}"
+              ${installed ? `onclick="connectWith('${w.id}')"` : ""}
+            >
+              <span class="name"><span class="dot"></span>${w.label}</span>
+              <span class="meta">${installed ? "Installed" : "Not detected"}</span>
+            </div>
+          `;
+        }).join("");
+        document.getElementById("walletOverlay").classList.add("open");
+      }
+
+      function closeWalletPicker(event) {
+        if (
+          !event ||
+          event.target === document.getElementById("walletOverlay")
+        )
+          document.getElementById("walletOverlay").classList.remove("open");
+      }
+
+      async function connectWith(name) {
+        closeWalletPicker();
+        if (!window.SL) {
+          showToast(
+            "Client loading",
+            "Wallet client is still initializing — try again in a second."
+          );
+          return;
+        }
+        try {
+          const w = await window.SL.connect(name);
+          state.wallet = w;
+          const btn = document.getElementById("connectBtn");
+          btn.innerHTML = `<span class="pulse-dot"></span>${shortAddress(
+            w.publicKey
+          )}`;
+          btn.classList.add("connected");
+          showToast(
+            "Wallet connected",
+            `${name[0].toUpperCase() + name.slice(1)} · ${shortAddress(w.publicKey)}`
+          );
+          await refreshUserState();
+        } catch (e) {
+          showToast("Connect failed", e?.message || String(e));
+        }
+      }
+
+      async function disconnectWallet() {
+        if (window.SL) await window.SL.disconnect();
+        state.wallet = null;
+        state.receipt = null;
+        state.stats = null;
+        state.balance = null;
+        const btn = document.getElementById("connectBtn");
+        btn.textContent = "Connect wallet";
+        btn.classList.remove("connected");
+        document.getElementById(
+          "positionBody"
+        ).className = "empty";
+        document.getElementById("positionBody").innerHTML = `
+          Connect a wallet to load your on-chain stats and claim test tokens.
+          <br /><br />
+          <span class="cta-link" onclick="onConnectButton()">→ Connect now</span>`;
+        document.getElementById("gaugeArc").style.strokeDashoffset = 528;
+        document.getElementById("gaugeVal").textContent = "—";
+      }
+
+      // ── On-chain state load + render ────────────────────
+      async function refreshUserState() {
+        if (!state.wallet || !window.SL) return;
+        try {
+          const [ready, receipt, stats, balance] = await Promise.all([
+            window.SL.isFaucetReady(),
+            window.SL.fetchClaimReceipt(),
+            window.SL.fetchUserStats(),
+            window.SL.fetchSlBalance(),
+          ]);
+          state.faucetReady = ready;
+          state.receipt = receipt;
+          state.stats = stats;
+          state.balance = balance;
+        } catch (e) {
+          console.warn("refreshUserState:", e);
+        }
+        renderPositionConnected();
+      }
+
+      function renderPositionConnected() {
+        const body = document.getElementById("positionBody");
+        body.className = "";
+
+        const stats = state.stats;
+        const balance = state.balance;
+        const hasReceipt = !!state.receipt;
+        const claimAmt = window.SHADOW_LEND_CONFIG.claimAmountUi;
+
+        let claimBlock = "";
+        if (!hasReceipt) {
+          if (state.faucetReady === false) {
+            claimBlock = `
+              <div class="claim-card" data-state="pending">
+                <div class="label">Test tokens</div>
+                <div class="headline">Faucet pending deploy</div>
+                <div class="sub">
+                  The SL faucet hasn't been initialized on
+                  ${window.SHADOW_LEND_CONFIG.cluster} yet. Once the program
+                  is deployed and the mint is created, this card will let you
+                  claim ${claimAmt.toLocaleString()} SL.
+                </div>
+              </div>`;
+          } else {
+            claimBlock = `
+              <div class="claim-card">
+                <div class="label">Test tokens</div>
+                <div class="headline">Claim ${claimAmt.toLocaleString()} SL</div>
+                <div class="sub">
+                  Each wallet can claim once. SL lets you try the supply and
+                  borrow flows without holding real assets.
+                </div>
+                <div class="actions">
+                  <button class="claim-btn" id="claimBtn" onclick="claimSL()">
+                    Claim ${claimAmt.toLocaleString()} SL
+                  </button>
+                </div>
+              </div>`;
+          }
+        }
+
+        const statsRows = stats
+          ? `
+          <div class="pos-rows">
+            <div class="pos-row">
+              <div>
+                <div class="pos-key">SL balance</div>
+                <div class="pos-hash">${
+                  hasReceipt
+                    ? "Claimed " + new Date(
+                        state.receipt.claimedAt.toNumber() * 1000
+                      ).toLocaleString()
+                    : "Unclaimed"
+                }</div>
+              </div>
+              <div class="pos-val green">${(balance ?? 0).toLocaleString()}</div>
+            </div>
+            <div class="pos-row">
+              <div>
+                <div class="pos-key">Proofs submitted</div>
+                <div class="pos-hash">on-chain counter</div>
+              </div>
+              <div class="pos-val">${stats.proofsSubmitted.toString()}</div>
+            </div>
+            <div class="pos-row">
+              <div>
+                <div class="pos-key">Supplies / Borrows / Repays</div>
+                <div class="pos-hash">UserStats PDA</div>
+              </div>
+              <div class="pos-val">${stats.supplies}·${stats.borrows}·${stats.repays}</div>
+            </div>
+            <div class="pos-row">
+              <div>
+                <div class="pos-key">Last health</div>
+                <div class="pos-hash">private to MXE · last public proof</div>
+              </div>
+              <div class="pos-val green">${(stats.lastHealthBps / 10000).toFixed(2)}</div>
+            </div>
+          </div>`
+          : `
+          <div class="pos-rows">
+            <div class="pos-row">
+              <div>
+                <div class="pos-key">SL balance</div>
+                <div class="pos-hash">${hasReceipt ? "Claimed" : "Unclaimed"}</div>
+              </div>
+              <div class="pos-val green">${(balance ?? 0).toLocaleString()}</div>
+            </div>
+            <div class="pos-row">
+              <div>
+                <div class="pos-key">On-chain stats</div>
+                <div class="pos-hash">No actions yet</div>
+              </div>
+              <div class="pos-val">—</div>
+            </div>
+          </div>`;
+
+        body.innerHTML = claimBlock + statsRows + `<div class="history-list" id="historyList"></div>`;
+
+        // Animate gauge: scale health (last_health_bps / 10000) into the arc.
+        const total = 528;
+        const ratio = stats
+          ? Math.min(1, stats.lastHealthBps / 25000)
+          : 0;
+        document.getElementById("gaugeArc").style.strokeDashoffset =
+          total * (1 - ratio);
+        document.getElementById("gaugeVal").textContent = stats
+          ? (stats.lastHealthBps / 10000).toFixed(2)
+          : "—";
+
+        renderHistory();
+      }
+
+      async function renderHistory() {
+        const el = document.getElementById("historyList");
+        if (!el || !window.SL) return;
+        const entries = await window.SL.loadHistory(10);
+        if (entries.length === 0) {
+          el.innerHTML = "";
+          return;
+        }
+        el.innerHTML =
+          `<div class="pos-key" style="margin-top:6px">Recent activity (this device)</div>` +
+          entries
+            .map((e) => {
+              const when = new Date(e.at).toLocaleTimeString();
+              const detail =
+                e.kind === "claim"
+                  ? `${e.amount.toLocaleString()} SL · ${(e.signature || "").slice(0, 8)}…`
+                  : `${e.amount ?? ""} ${e.asset ?? ""}`.trim();
+              return `
+                <div class="history-row">
+                  <span class="kind">${e.kind}</span>
+                  <span class="detail">${detail}</span>
+                  <span class="when">${when}</span>
+                </div>`;
+            })
+            .join("");
+      }
+
+      async function claimSL() {
+        if (!state.wallet || !window.SL) return;
+        const btn = document.getElementById("claimBtn");
+        btn?.classList.add("loading");
+        if (btn) btn.textContent = "Confirm in wallet…";
+        try {
+          const sig = await window.SL.claimFaucet();
+          await window.SL.appendHistory({
+            kind: "claim",
+            amount: window.SHADOW_LEND_CONFIG.claimAmountUi,
+            signature: sig,
+          });
+          showToast(
+            "10,000 SL claimed",
+            `Sig ${sig.slice(0, 8)}… · refreshing on-chain state.`
+          );
+          await refreshUserState();
+        } catch (e) {
+          btn?.classList.remove("loading");
+          const msg = e?.message || String(e);
+          // Friendly hint for the common "faucet not initialized" case.
+          if (/faucet not initialized|not initialized|missing IDL/i.test(msg)) {
+            showToast(
+              "Faucet not deployed",
+              "The SL faucet hasn't been initialized on this cluster yet."
+            );
+          } else {
+            showToast("Claim failed", msg);
+          }
+        }
+      }
+
+      // ── Modal ───────────────────────────────────────────
+      function openModal(event, action, assetId) {
+        event && event.stopPropagation();
+        if (!state.wallet) {
+          showToast(
+            "Wallet required",
+            "Connect a wallet before preparing a private market action."
+          );
+          return;
+        }
+        currentAction = action;
+        selectMarket(assetId);
+        const verb = action === "deposit" ? "Supply" : "Borrow";
+        document.getElementById("modalTitle").textContent = `${verb} ${assetId}`;
+        document.getElementById("inputToken").textContent = assetId;
+        const btn = document.getElementById("modalBtn");
+        btn.className = "modal-btn" + (action === "borrow" ? " borrow" : "");
+        document.getElementById("modalBtnText").textContent = `${verb} ${assetId}`;
+        document.getElementById("modalConstraint").textContent =
+          action === "deposit"
+            ? "Range proof + state write"
+            : "LTV within threshold";
+        document.getElementById("modalOverlay").classList.add("open");
+        setTimeout(() => document.getElementById("amountInput").focus(), 120);
+      }
+
+      function closeModal(event) {
+        if (!event || event.target === document.getElementById("modalOverlay"))
+          document.getElementById("modalOverlay").classList.remove("open");
+      }
+
+      async function submitTransaction() {
+        const amount = document.getElementById("amountInput").value;
+        if (!amount || Number(amount) <= 0) {
+          showToast("Invalid amount", "Enter an amount greater than zero.");
+          return;
+        }
+        const btn = document.getElementById("modalBtn");
+        const btnText = document.getElementById("modalBtnText");
+        btn.classList.add("loading");
+        btnText.textContent = "Encrypting locally…";
+        await sleep(600);
+        btnText.textContent = "Requesting proof…";
+        await sleep(750);
+        btnText.textContent = "Preparing transaction…";
+        await sleep(650);
+
+        const now = new Date();
+        const t = `${String(now.getMinutes()).padStart(2, "0")}:${String(
+          now.getSeconds()
+        ).padStart(2, "0")}`;
+        proofJobs.unshift([
+          "live",
+          currentAction === "deposit" ? "Supply proof" : "Borrow proof",
+          `${amount} ${selectedMarket.id} · ${randomHash()}`,
+          selectedMarket.id,
+          t,
+        ]);
+        renderProofs();
+        btn.classList.remove("loading");
+        document.getElementById("modalOverlay").classList.remove("open");
+        document.getElementById("amountInput").value = "";
+        btnText.textContent =
+          currentAction === "deposit"
+            ? `Supply ${selectedMarket.id}`
+            : `Borrow ${selectedMarket.id}`;
+        showToast(
+          "Proof job queued",
+          `${amount} ${selectedMarket.id} staged for private settlement.`
+        );
+
+        // Record on-chain: bumps counters on the UserStats PDA.
+        if (window.SL && state.wallet) {
+          const kind = currentAction === "deposit" ? "supply" : "borrow";
+          const healthBps = 7500 + Math.floor(Math.random() * 2500);
+          try {
+            await window.SL.recordAction(kind, healthBps);
+            await window.SL.appendHistory({
+              kind,
+              amount,
+              asset: selectedMarket.id,
+            });
+            await refreshUserState();
+          } catch (e) {
+            // Recording is best-effort; the visual flow already completed.
+            console.warn("recordAction failed:", e);
+          }
+        }
+      }
+
+      function showToast(title, message) {
+        const toast = document.getElementById("toast");
+        document.getElementById("toastTitle").textContent = title;
+        document.getElementById("toastMsg").textContent = message;
+        toast.classList.add("show");
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(() => toast.classList.remove("show"), 3600);
+      }
+
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      function randomHash() {
+        const hex = "0123456789abcdef";
+        let s = "0x";
+        for (let i = 0; i < 4; i++) s += hex[Math.floor(Math.random() * 16)];
+        s += "…";
+        for (let i = 0; i < 4; i++) s += hex[Math.floor(Math.random() * 16)];
+        return s;
+      }
+
+      // ── Cipher demo ─────────────────────────────────────
+      function regenCipher(amount) {
+        const out = document.getElementById("demoCipher");
+        const seed = String(amount) + "·shadowlend";
+        const groups = [];
+        const chars = "0123456789abcdef";
+        // Deterministic-ish pseudo-random from seed
+        let h = 0;
+        for (let i = 0; i < seed.length; i++)
+          h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+        for (let g = 0; g < 16; g++) {
+          let block = "";
+          for (let i = 0; i < 4; i++) {
+            h = (h * 1103515245 + 12345) >>> 0;
+            block += chars[h & 0xf];
+          }
+          groups.push(block);
+        }
+        out.innerHTML = groups
+          .map((b, i) => `<span style="animation-delay:${i * 0.05}s">${b}</span>`)
+          .join(" ");
+      }
+
+      function regenHeroCipher() {
+        const hex = "0123456789abcdef";
+        const out = [];
+        for (let g = 0; g < 8; g++) {
+          let b = "";
+          for (let i = 0; i < 4; i++)
+            b += hex[Math.floor(Math.random() * 16)];
+          out.push(b);
+        }
+        document.getElementById("heroCipher").textContent = "0x" + out.join(" ");
+      }
+
+      // ── Reveal observer ─────────────────────────────────
+      const revealObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              e.target.classList.add("in");
+              revealObserver.unobserve(e.target);
+            }
+          });
+        },
+        { threshold: 0.08, rootMargin: "0px 0px -60px 0px" }
+      );
+
+      // ── Countup ─────────────────────────────────────────
+      function startCountup(el) {
+        const target = parseFloat(el.dataset.countup);
+        const suffix = el.dataset.suffix || "";
+        const isInt = el.dataset.int === "1";
+        const dur = 1400;
+        const start = performance.now();
+        const fmt = (v) =>
+          isInt
+            ? Math.round(v).toLocaleString()
+            : v.toFixed(target % 1 === 0 ? 0 : 2);
+        const tick = (now) => {
+          const p = Math.min(1, (now - start) / dur);
+          const eased = 1 - Math.pow(1 - p, 3);
+          const prefix = el.textContent.startsWith("$") ? "$" : "";
+          el.textContent = `${prefix}${fmt(target * eased)}${suffix}`;
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+
+      const countObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              startCountup(e.target);
+              countObserver.unobserve(e.target);
+            }
+          });
+        },
+        { threshold: 0.4 }
+      );
+
+      // ── Progress + cursor ───────────────────────────────
+      const progress = document.getElementById("progress");
+      window.addEventListener("scroll", () => {
+        const h = document.documentElement;
+        const pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+        progress.style.width = pct + "%";
+      });
+
+      window.addEventListener("pointermove", (e) => {
+        document.body.style.setProperty("--cursor-x", e.clientX + "px");
+        document.body.style.setProperty("--cursor-y", e.clientY + "px");
+      });
+
+      // ── Demo slider ─────────────────────────────────────
+      const slider = document.getElementById("demoSlider");
+      const numEl = document.getElementById("demoNum");
+      function syncDemo() {
+        const v = Number(slider.value);
+        numEl.textContent = v.toLocaleString();
+        regenCipher(v);
+      }
+      slider.addEventListener("input", syncDemo);
+      syncDemo();
+
+      // ── Boot ────────────────────────────────────────────
+      renderMarkets();
+      renderProofs();
+      selectMarket("SOL");
+
+      document
+        .querySelectorAll(".reveal")
+        .forEach((el) => revealObserver.observe(el));
+      document
+        .querySelectorAll("[data-countup]")
+        .forEach((el) => countObserver.observe(el));
+
+      // Cycle hero cipher
+      setInterval(regenHeroCipher, 3200);
+
+      // ── Modal accessibility: Esc + focus trap ───────────
+      function openModals() {
+        return [
+          document.getElementById("modalOverlay"),
+          document.getElementById("walletOverlay"),
+        ].filter((m) => m && m.classList.contains("open"));
+      }
+
+      function closeAnyModal() {
+        document
+          .getElementById("modalOverlay")
+          ?.classList.remove("open");
+        document
+          .getElementById("walletOverlay")
+          ?.classList.remove("open");
+      }
+
+      window.addEventListener("keydown", (e) => {
+        const open = openModals();
+        if (open.length === 0) return;
+        if (e.key === "Escape") {
+          closeAnyModal();
+          return;
+        }
+        if (e.key === "Tab") {
+          const overlay = open[open.length - 1];
+          const focusables = overlay.querySelectorAll(
+            'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusables.length === 0) return;
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      });
+
+      // ── Initial faucet probe: tell the user if the program/faucet
+      //    isn't deployed yet, instead of silently rendering empty state.
+      async function probeFaucet() {
+        try {
+          const cfg = await window.SL.fetchFaucetConfig();
+          state.faucetReady = !!cfg;
+          if (!cfg) renderFaucetBanner();
+        } catch {
+          state.faucetReady = false;
+          renderFaucetBanner();
+        }
+      }
+
+      if (window.SL) {
+        probeFaucet();
+      } else {
+        window.addEventListener("sl-client-ready", probeFaucet, { once: true });
+      }
+
+      function renderFaucetBanner() {
+        if (document.getElementById("deployBanner")) return;
+        const main = document.querySelector("main");
+        if (!main) return;
+        const banner = document.createElement("div");
+        banner.id = "deployBanner";
+        banner.setAttribute("role", "status");
+        banner.innerHTML = `
+          <span class="d">●</span>
+          Faucet not yet initialized on
+          <strong>${window.SHADOW_LEND_CONFIG.cluster}</strong>. Connect
+          still works; claim and on-chain stats unlock once the program is
+          deployed.
+        `;
+        main.insertBefore(banner, main.firstChild);
+      }
+    </script>
+  </body>
 </html>

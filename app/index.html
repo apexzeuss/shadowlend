@@ -2900,6 +2900,18 @@
                   Each wallet can claim once. SL lets you try the supply and
                   borrow flows without holding real assets.
                 </div>
+                <div class="sub" style="margin-top: 8px; opacity: 0.75">
+                  Your wallet pays ~0.003 devnet SOL for the network fee and
+                  account rent — this isn't gasless. Wallet empty? Grab devnet
+                  SOL at
+                  <a
+                    href="https://faucet.solana.com"
+                    target="_blank"
+                    rel="noopener"
+                    style="color: inherit; text-decoration: underline"
+                    >faucet.solana.com</a
+                  >.
+                </div>
                 <div class="actions">
                   <button class="claim-btn" id="claimBtn" onclick="claimSL()">
                     Claim ${claimAmt.toLocaleString()} SL
@@ -3033,6 +3045,14 @@
             showToast(
               "Faucet not deployed",
               "The SL faucet hasn't been initialized on this cluster yet."
+            );
+          } else if (
+            /insufficient|not enough|debit an account|prior credit/i.test(msg)
+          ) {
+            showToast(
+              "Not enough devnet SOL",
+              "Your wallet needs ~0.003 devnet SOL for the fee and account " +
+                "rent. Get some free at faucet.solana.com, then claim again."
             );
           } else {
             showToast("Claim failed", msg);

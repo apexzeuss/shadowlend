@@ -6,34 +6,35 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0b1612" />
+    <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Credit, hidden in plain sight</title>
-    <script src="./config.js"></script>
+    <script src="./config.js?v=2"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
       :root {
-        --bg-0: #070d0b;
-        --bg-1: #0b1612;
-        --bg-2: #11201b;
-        --bg-3: #182d26;
+        --bg-0: #060709;
+        --bg-1: #0b0c10;
+        --bg-2: #131419;
+        --bg-3: #1d1f27;
         --paper: #f4ead8;
         --paper-soft: #e8dcc4;
         --paper-deep: #d6c8b0;
-        --ink: #07100d;
-        --ink-soft: #18211f;
+        --ink: #060709;
+        --ink-soft: #181a20;
         --line: rgba(244, 234, 216, 0.1);
         --line-strong: rgba(244, 234, 216, 0.22);
         --line-paper: #c8b99e;
-        --muted: #8ea69d;
-        --faint: #5b6f68;
-        --green: #62e2a8;
-        --green-deep: #1f5a47;
-        --green-soft: rgba(98, 226, 168, 0.14);
-        --amber: #f0b367;
+        --muted: #9a9ba6;
+        --faint: #61636e;
+        /* Monochrome accent ramp — no hue, just light-on-black. */
+        --green: #e6e6ea;
+        --green-deep: #45454e;
+        --green-soft: rgba(230, 230, 234, 0.1);
+        --amber: #b8b8c0;
         --red: #ff7e6c;
-        --blue: #9bc1ef;
+        --blue: #cfcfd6;
         --shadow: rgba(0, 0, 0, 0.55);
         --serif: "Newsreader", "Instrument Serif", Georgia, serif;
         --display: "Instrument Serif", "Newsreader", Georgia, serif;
@@ -63,17 +64,17 @@
         background:
           radial-gradient(
             ellipse at 20% -10%,
-            rgba(98, 226, 168, 0.18),
+            rgba(230, 230, 234, 0.06),
             transparent 55%
           ),
           radial-gradient(
             ellipse at 90% 0%,
-            rgba(240, 179, 103, 0.09),
+            rgba(184, 184, 192, 0.04),
             transparent 50%
           ),
           radial-gradient(
             ellipse at 50% 110%,
-            rgba(98, 226, 168, 0.1),
+            rgba(230, 230, 234, 0.045),
             transparent 55%
           ),
           linear-gradient(180deg, var(--bg-0), var(--bg-1) 60%, var(--bg-0));
@@ -108,19 +109,10 @@
         pointer-events: none;
         background: radial-gradient(
           circle at var(--cursor-x, 50%) var(--cursor-y, 12%),
-          rgba(98, 226, 168, 0.12),
+          rgba(230, 230, 234, 0.12),
           transparent 26rem
         );
         transition: background 0.25s linear;
-      }
-
-      #cipherCanvas {
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        opacity: 0.55;
-        pointer-events: none;
-        mix-blend-mode: screen;
       }
 
       .vignette {
@@ -132,7 +124,7 @@
           radial-gradient(
             ellipse at 50% 50%,
             transparent 40%,
-            rgba(7, 13, 11, 0.75) 100%
+            rgba(6, 7, 9, 0.75) 100%
           );
       }
 
@@ -145,7 +137,7 @@
         height: 2px;
         width: 0%;
         background: linear-gradient(90deg, var(--green), var(--amber));
-        box-shadow: 0 0 14px rgba(98, 226, 168, 0.6);
+        box-shadow: 0 0 14px rgba(230, 230, 234, 0.6);
       }
 
       /* ── Topbar ──────────────────────────────────────────── */
@@ -158,7 +150,7 @@
         justify-content: space-between;
         gap: 18px;
         padding: 16px 28px;
-        background: rgba(7, 13, 11, 0.6);
+        background: rgba(6, 7, 9, 0.6);
         backdrop-filter: blur(18px) saturate(140%);
         -webkit-backdrop-filter: blur(18px) saturate(140%);
         border-bottom: 1px solid var(--line);
@@ -179,8 +171,8 @@
           radial-gradient(circle at 30% 30%, var(--green), transparent 55%),
           linear-gradient(135deg, var(--bg-3), var(--bg-1));
         border: 1px solid var(--line-strong);
-        box-shadow: inset 0 0 10px rgba(98, 226, 168, 0.45),
-          0 0 16px rgba(98, 226, 168, 0.25);
+        box-shadow: inset 0 0 10px rgba(230, 230, 234, 0.45),
+          0 0 16px rgba(230, 230, 234, 0.25);
       }
 
       .brand-name {
@@ -250,7 +242,7 @@
         background: linear-gradient(
           120deg,
           transparent 30%,
-          rgba(98, 226, 168, 0.55) 50%,
+          rgba(230, 230, 234, 0.55) 50%,
           transparent 70%
         );
         transform: translateX(-120%);
@@ -260,7 +252,7 @@
       .connect-btn:hover {
         transform: translateY(-1px);
         box-shadow: 0 0 0 6px rgba(244, 234, 216, 0.06),
-          0 18px 40px rgba(98, 226, 168, 0.25);
+          0 18px 40px rgba(230, 230, 234, 0.25);
       }
 
       .connect-btn:hover::after {
@@ -270,9 +262,9 @@
       .connect-btn.connected {
         background: transparent;
         color: var(--green);
-        border-color: rgba(98, 226, 168, 0.5);
-        box-shadow: inset 0 0 0 1px rgba(98, 226, 168, 0.2),
-          0 0 24px rgba(98, 226, 168, 0.25);
+        border-color: rgba(230, 230, 234, 0.5);
+        box-shadow: inset 0 0 0 1px rgba(230, 230, 234, 0.2),
+          0 0 24px rgba(230, 230, 234, 0.25);
       }
 
       .pulse-dot {
@@ -282,19 +274,19 @@
         margin-right: 8px;
         background: var(--green);
         border-radius: 50%;
-        box-shadow: 0 0 0 0 rgba(98, 226, 168, 0.7);
+        box-shadow: 0 0 0 0 rgba(230, 230, 234, 0.7);
         animation: pulse 1.8s infinite;
       }
 
       @keyframes pulse {
         0% {
-          box-shadow: 0 0 0 0 rgba(98, 226, 168, 0.6);
+          box-shadow: 0 0 0 0 rgba(230, 230, 234, 0.6);
         }
         70% {
-          box-shadow: 0 0 0 10px rgba(98, 226, 168, 0);
+          box-shadow: 0 0 0 10px rgba(230, 230, 234, 0);
         }
         100% {
-          box-shadow: 0 0 0 0 rgba(98, 226, 168, 0);
+          box-shadow: 0 0 0 0 rgba(230, 230, 234, 0);
         }
       }
 
@@ -309,8 +301,8 @@
         margin: 18px auto 0;
         padding: 12px 18px;
         border-radius: 12px;
-        background: rgba(240, 179, 103, 0.08);
-        border: 1px solid rgba(240, 179, 103, 0.32);
+        background: rgba(184, 184, 192, 0.08);
+        border: 1px solid rgba(184, 184, 192, 0.32);
         color: var(--paper);
         font-family: var(--mono);
         font-size: 12px;
@@ -504,7 +496,7 @@
 
       .cta:hover {
         transform: translateY(-2px);
-        box-shadow: 0 22px 48px rgba(98, 226, 168, 0.2);
+        box-shadow: 0 22px 48px rgba(230, 230, 234, 0.2);
       }
 
       .cta:hover::before {
@@ -844,7 +836,7 @@
         inset: 0;
         background: radial-gradient(
           circle at var(--mx, 50%) var(--my, 50%),
-          rgba(98, 226, 168, 0.18),
+          rgba(230, 230, 234, 0.18),
           transparent 40%
         );
         opacity: 0;
@@ -854,9 +846,9 @@
 
       .market-card:hover {
         transform: translateY(-6px);
-        border-color: rgba(98, 226, 168, 0.4);
-        box-shadow: 0 30px 70px rgba(98, 226, 168, 0.18),
-          0 0 0 1px rgba(98, 226, 168, 0.15);
+        border-color: rgba(230, 230, 234, 0.4);
+        box-shadow: 0 30px 70px rgba(230, 230, 234, 0.18),
+          0 0 0 1px rgba(230, 230, 234, 0.15);
       }
 
       .market-card:hover::before {
@@ -864,10 +856,10 @@
       }
 
       .market-card.selected {
-        border-color: rgba(98, 226, 168, 0.45);
+        border-color: rgba(230, 230, 234, 0.45);
         background: linear-gradient(
           155deg,
-          rgba(98, 226, 168, 0.08),
+          rgba(230, 230, 234, 0.08),
           rgba(244, 234, 216, 0.02) 60%
         );
       }
@@ -896,15 +888,15 @@
       }
 
       .asset-mark.sol {
-        background: linear-gradient(135deg, #c8b0ff, #6dd3b8 90%);
+        background: linear-gradient(135deg, #d4d4da, #8a8a93 90%);
       }
 
       .asset-mark.usdc {
-        background: linear-gradient(135deg, #9bc1ef, #f4ead8 90%);
+        background: linear-gradient(135deg, #c2c2c9, #f4ead8 90%);
       }
 
       .asset-mark.wbtc {
-        background: linear-gradient(135deg, #f0b367, #f4ead8 90%);
+        background: linear-gradient(135deg, #9a9aa3, #f4ead8 90%);
       }
 
       .market-tag {
@@ -1004,7 +996,7 @@
         background: var(--green);
         color: var(--ink);
         border-color: var(--green);
-        box-shadow: 0 12px 30px rgba(98, 226, 168, 0.3);
+        box-shadow: 0 12px 30px rgba(230, 230, 234, 0.3);
       }
 
       /* ── Scene 4: Proof flow ─────────────────────────────── */
@@ -1022,11 +1014,11 @@
         background: linear-gradient(
           90deg,
           transparent 0,
-          rgba(98, 226, 168, 0.5) 8%,
-          rgba(98, 226, 168, 0.5) 92%,
+          rgba(230, 230, 234, 0.5) 8%,
+          rgba(230, 230, 234, 0.5) 92%,
           transparent 100%
         );
-        box-shadow: 0 0 22px rgba(98, 226, 168, 0.4);
+        box-shadow: 0 0 22px rgba(230, 230, 234, 0.4);
       }
 
       .flow-track::before {
@@ -1039,9 +1031,9 @@
         border-radius: 99px;
         background: linear-gradient(
           90deg,
-          rgba(98, 226, 168, 0),
-          rgba(98, 226, 168, 1) 50%,
-          rgba(98, 226, 168, 0)
+          rgba(230, 230, 234, 0),
+          rgba(230, 230, 234, 1) 50%,
+          rgba(230, 230, 234, 0)
         );
         filter: blur(2px);
         animation: flowDart 4.5s linear infinite;
@@ -1079,19 +1071,19 @@
         height: 64px;
         margin: 8px auto 22px;
         border-radius: 50%;
-        border: 1px solid rgba(98, 226, 168, 0.5);
+        border: 1px solid rgba(230, 230, 234, 0.5);
         background: radial-gradient(
           circle at 50% 30%,
-          rgba(98, 226, 168, 0.35),
-          rgba(98, 226, 168, 0.05)
+          rgba(230, 230, 234, 0.35),
+          rgba(230, 230, 234, 0.05)
         );
         color: var(--green);
         font-family: var(--display);
         font-size: 28px;
         font-weight: 400;
         line-height: 1;
-        box-shadow: 0 0 22px rgba(98, 226, 168, 0.3),
-          inset 0 0 14px rgba(98, 226, 168, 0.18);
+        box-shadow: 0 0 22px rgba(230, 230, 234, 0.3),
+          inset 0 0 14px rgba(230, 230, 234, 0.18);
       }
 
       .flow-title {
@@ -1119,7 +1111,7 @@
         letter-spacing: 0.18em;
         text-transform: uppercase;
         color: var(--green);
-        border: 1px solid rgba(98, 226, 168, 0.3);
+        border: 1px solid rgba(230, 230, 234, 0.3);
         border-radius: 99px;
         background: var(--green-soft);
       }
@@ -1313,12 +1305,12 @@
         gap: 18px;
         align-items: center;
         padding: 18px 22px;
-        background: rgba(11, 22, 18, 0.7);
+        background: rgba(11, 12, 16, 0.7);
         backdrop-filter: blur(6px);
       }
 
       .proof-row.head {
-        background: rgba(11, 22, 18, 0.92);
+        background: rgba(11, 12, 16, 0.92);
         font-size: 10px;
         letter-spacing: 0.18em;
         text-transform: uppercase;
@@ -1425,7 +1417,7 @@
         display: none;
         place-items: center;
         padding: 18px;
-        background: rgba(7, 13, 11, 0.78);
+        background: rgba(6, 7, 9, 0.78);
         backdrop-filter: blur(10px);
       }
 
@@ -1445,8 +1437,8 @@
         color: var(--ink);
         border: 1px solid var(--line-paper);
         box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5),
-          0 0 0 1px rgba(98, 226, 168, 0.25),
-          0 0 60px rgba(98, 226, 168, 0.18);
+          0 0 0 1px rgba(230, 230, 234, 0.25),
+          0 0 60px rgba(230, 230, 234, 0.18);
       }
 
       .modal-head {
@@ -1517,7 +1509,7 @@
 
       .amount-input:focus {
         border-color: var(--green-deep);
-        box-shadow: 0 0 0 4px rgba(98, 226, 168, 0.18);
+        box-shadow: 0 0 0 4px rgba(230, 230, 234, 0.18);
       }
 
       .input-token {
@@ -1587,7 +1579,7 @@
       }
 
       .modal-btn.borrow:hover {
-        box-shadow: 0 18px 40px rgba(98, 226, 168, 0.4);
+        box-shadow: 0 18px 40px rgba(230, 230, 234, 0.4);
       }
 
       .modal-btn.loading {
@@ -1620,7 +1612,7 @@
       }
 
       .wallet-row:hover {
-        background: rgba(98, 226, 168, 0.1);
+        background: rgba(230, 230, 234, 0.1);
         border-color: var(--green-deep);
       }
 
@@ -1645,7 +1637,7 @@
         height: 8px;
         border-radius: 50%;
         background: var(--green-deep);
-        box-shadow: 0 0 8px rgba(31, 90, 71, 0.5);
+        box-shadow: 0 0 8px rgba(69, 69, 78, 0.5);
       }
 
       .wallet-row[data-installed="false"] .dot {
@@ -1674,10 +1666,10 @@
         border-radius: 14px;
         background: linear-gradient(
           135deg,
-          rgba(98, 226, 168, 0.18),
-          rgba(240, 179, 103, 0.08)
+          rgba(230, 230, 234, 0.18),
+          rgba(184, 184, 192, 0.08)
         );
-        border: 1px solid rgba(31, 90, 71, 0.45);
+        border: 1px solid rgba(69, 69, 78, 0.45);
       }
 
       .claim-card .label {
@@ -1727,7 +1719,7 @@
 
       .claim-btn:hover {
         transform: translateY(-1px);
-        box-shadow: 0 12px 30px rgba(31, 90, 71, 0.3);
+        box-shadow: 0 12px 30px rgba(69, 69, 78, 0.3);
       }
 
       .claim-btn.loading {
@@ -1736,8 +1728,8 @@
       }
 
       .claim-card[data-state="pending"] {
-        background: rgba(240, 179, 103, 0.1);
-        border-color: rgba(240, 179, 103, 0.4);
+        background: rgba(184, 184, 192, 0.1);
+        border-color: rgba(184, 184, 192, 0.4);
       }
       .claim-card[data-state="pending"] .label {
         color: #b27628;
@@ -1792,9 +1784,9 @@
         border-radius: var(--radius);
         background: var(--paper);
         color: var(--ink);
-        border: 1px solid rgba(98, 226, 168, 0.4);
+        border: 1px solid rgba(230, 230, 234, 0.4);
         box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5),
-          0 0 30px rgba(98, 226, 168, 0.18);
+          0 0 30px rgba(230, 230, 234, 0.18);
       }
 
       .toast.show {
@@ -2043,9 +2035,6 @@
           bottom: max(12px, env(safe-area-inset-bottom));
           padding: 14px;
         }
-
-        /* Save the battery: cipher rain is decorative, kill it on phones */
-        #cipherCanvas { display: none; }
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -2057,12 +2046,10 @@
           transition-duration: 0.001ms !important;
         }
         .reveal { opacity: 1; transform: none; }
-        #cipherCanvas { display: none; }
       }
     </style>
   </head>
   <body>
-    <canvas id="cipherCanvas"></canvas>
     <div class="vignette"></div>
     <div class="progress" id="progress"></div>
 
@@ -2100,7 +2087,7 @@
               ShadowLend lets you supply collateral and borrow on Solana while
               your exact balances stay private. Amounts are encrypted in your
               browser, verified through Arcium's MXE proof path, then settled
-              on-chain as ciphertext.
+              on-chain as encrypted state.
             </p>
             <div class="hero-actions">
               <a class="cta" href="#markets">
@@ -2134,7 +2121,7 @@
               <span class="stat-val small green">MXE + ElGamal</span>
             </div>
             <div class="cipher-line">
-              <span class="tag">Last settled ciphertext</span>
+              <span class="tag">Last settled value</span>
               <span id="heroCipher">0x8f3a c4b2 7e91 d68a 4f02 ab37 9c1d 0e44</span>
             </div>
           </aside>
@@ -2147,13 +2134,13 @@
         <div class="wrap">
           <div class="scene-head reveal">
             <div>
-              <div class="eyebrow">02 · Live cipher</div>
+              <div class="eyebrow">02 · Live encryption</div>
               <h2 class="scene-title">
                 Your amount never <em>leaves</em> the browser.
               </h2>
             </div>
             <p class="scene-copy">
-              Drag the slider. Watch a plain number become a ciphertext block
+              Drag the slider. Watch a plain number become an encrypted block
               before it ever touches the network. Only a yes/no proof reaches
               the chain never your balance.
             </p>
@@ -2186,9 +2173,9 @@
               <svg viewBox="0 0 100 80" fill="none">
                 <defs>
                   <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stop-color="rgba(98,226,168,0)" />
-                    <stop offset="50%" stop-color="rgba(98,226,168,0.9)" />
-                    <stop offset="100%" stop-color="rgba(98,226,168,0)" />
+                    <stop offset="0%" stop-color="rgba(230,230,234,0)" />
+                    <stop offset="50%" stop-color="rgba(230,230,234,0.9)" />
+                    <stop offset="100%" stop-color="rgba(230,230,234,0)" />
                   </linearGradient>
                 </defs>
                 <path
@@ -2198,13 +2185,13 @@
                 />
                 <path
                   d="M75 28 L92 40 L75 52"
-                  stroke="rgba(98,226,168,0.9)"
+                  stroke="rgba(230,230,234,0.9)"
                   stroke-width="2"
                   fill="none"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 />
-                <circle cx="14" cy="40" r="3" fill="rgba(98,226,168,1)">
+                <circle cx="14" cy="40" r="3" fill="rgba(230,230,234,1)">
                   <animate
                     attributeName="cx"
                     values="14;82;14"
@@ -2222,7 +2209,7 @@
             </div>
 
             <div class="demo-card reveal" data-stagger="3">
-              <div class="demo-label">Ciphertext what the chain sees</div>
+              <div class="demo-label">Encrypted — what the chain sees</div>
               <div class="demo-cipher" id="demoCipher"></div>
               <div class="demo-foot">
                 <span><span class="dot"></span>ElGamal · Curve25519</span>
@@ -2247,7 +2234,7 @@
             <p class="scene-copy">
               Tap a market to inspect its risk settings. Supply and borrow both
               issue private action tickets that hit Arcium first, then land
-              on-chain as ciphertext.
+              on-chain as encrypted state.
             </p>
           </div>
 
@@ -2269,7 +2256,7 @@
             <p class="scene-copy">
               Your number flows through encryption, secure compute, a yes/no
               proof, and on-chain settlement and at every step, only a
-              ciphertext or a boolean is visible.
+              an encrypted value or a boolean is visible.
             </p>
           </div>
 
@@ -2290,7 +2277,7 @@
                 <div class="flow-title">MXE computes</div>
                 <p class="flow-copy">
                   Arcium's private compute layer checks the rule LTV bound,
-                  health factor, supply cap on the ciphertext.
+                  health factor, supply cap on the encrypted amount.
                 </p>
                 <span class="flow-tag">arcium</span>
               </div>
@@ -2307,7 +2294,7 @@
                 <div class="flow-num">4</div>
                 <div class="flow-title">Settle on Solana</div>
                 <p class="flow-copy">
-                  The position is updated using ciphertext and proof refs.
+                  The position is updated using encrypted state and proof refs.
                   Public state never reveals the size of your position.
                 </p>
                 <span class="flow-tag">solana</span>
@@ -2355,8 +2342,8 @@
                 <svg viewBox="0 0 200 200">
                   <defs>
                     <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stop-color="#62e2a8" />
-                      <stop offset="100%" stop-color="#f0b367" />
+                      <stop offset="0%" stop-color="#e6e6ea" />
+                      <stop offset="100%" stop-color="#6b6b74" />
                     </linearGradient>
                   </defs>
                   <circle
@@ -2380,7 +2367,7 @@
                     stroke-dashoffset="528"
                     transform="rotate(-90 100 100)"
                     style="
-                      filter: drop-shadow(0 0 12px rgba(98, 226, 168, 0.5));
+                      filter: drop-shadow(0 0 12px rgba(230, 230, 234, 0.5));
                       transition: stroke-dashoffset 1.4s
                         cubic-bezier(0.2, 0.7, 0.2, 1);
                     "
@@ -2408,7 +2395,7 @@
             <div>
               <div class="eyebrow">06 · Live proof stream</div>
               <h2 class="scene-title">
-                The network hums in <em>ciphertext.</em>
+                The network hums in <em>the dark.</em>
               </h2>
             </div>
             <p class="scene-copy">
@@ -2519,7 +2506,7 @@
           </div>
           <div class="modal-fact">
             <span class="k">On-chain state</span>
-            <span class="v">Ciphertext only</span>
+            <span class="v">Encrypted only</span>
           </div>
         </div>
         <button
@@ -2565,7 +2552,7 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js"></script>
+    <script type="module" src="./sl-client.js?v=2"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       const markets = [
@@ -2638,60 +2625,6 @@
         { id: "backpack", label: "Backpack", check: () => window.backpack?.isBackpack },
       ];
 
-      // ── Cipher rain canvas ──────────────────────────────
-      (function cipherRain() {
-        const canvas = document.getElementById("cipherCanvas");
-        if (!canvas) return;
-
-        const reducedMotion = window.matchMedia(
-          "(prefers-reduced-motion: reduce)"
-        ).matches;
-        // Skip the canvas entirely on small screens and when the user has
-        // asked for reduced motion — it's decoration, not content.
-        if (reducedMotion || window.innerWidth < 720) {
-          canvas.remove();
-          return;
-        }
-
-        const ctx = canvas.getContext("2d");
-        let cols, drops, raf, paused = false;
-        const chars = "0123456789abcdef·∎◇◆∘";
-
-        function size() {
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-          cols = Math.floor(canvas.width / 22);
-          drops = Array(cols).fill(0).map(() => Math.random() * canvas.height);
-        }
-        size();
-        window.addEventListener("resize", size);
-
-        // Pause when the tab is in the background.
-        document.addEventListener("visibilitychange", () => {
-          paused = document.hidden;
-          if (!paused) raf = requestAnimationFrame(tick);
-        });
-
-        function tick() {
-          if (paused) return;
-          ctx.fillStyle = "rgba(7, 13, 11, 0.08)";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.font = "12px IBM Plex Mono, monospace";
-          for (let i = 0; i < cols; i++) {
-            const c = chars[Math.floor(Math.random() * chars.length)];
-            const x = i * 22;
-            const y = drops[i];
-            const alpha = 0.06 + Math.random() * 0.18;
-            ctx.fillStyle = `rgba(98, 226, 168, ${alpha})`;
-            ctx.fillText(c, x, y);
-            if (y > canvas.height && Math.random() > 0.985) drops[i] = 0;
-            else drops[i] = y + 22;
-          }
-          raf = requestAnimationFrame(tick);
-        }
-        raf = requestAnimationFrame(tick);
-      })();
-
       // ── Markets render ──────────────────────────────────
       function sparkPath(values, w = 240, h = 56) {
         const min = Math.min(...values),
@@ -2730,8 +2663,8 @@
                 <svg viewBox="0 0 240 56" preserveAspectRatio="none">
                   <defs>
                     <linearGradient id="sg-${m.id}" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color="rgba(98,226,168,0.4)" />
-                      <stop offset="100%" stop-color="rgba(98,226,168,0)" />
+                      <stop offset="0%" stop-color="rgba(230,230,234,0.4)" />
+                      <stop offset="100%" stop-color="rgba(230,230,234,0)" />
                     </linearGradient>
                   </defs>
                   <path
@@ -2741,7 +2674,7 @@
                   <path
                     d="${path}"
                     fill="none"
-                    stroke="rgba(98,226,168,0.9)"
+                    stroke="rgba(230,230,234,0.9)"
                     stroke-width="1.5"
                   />
                 </svg>
@@ -2863,21 +2796,35 @@
           );
           return;
         }
+        let w;
         try {
-          const w = await window.SL.connect(name);
-          state.wallet = w;
-          const btn = document.getElementById("connectBtn");
-          btn.innerHTML = `<span class="pulse-dot"></span>${shortAddress(
-            w.publicKey
-          )}`;
-          btn.classList.add("connected");
-          showToast(
-            "Wallet connected",
-            `${name[0].toUpperCase() + name.slice(1)} · ${shortAddress(w.publicKey)}`
-          );
+          w = await window.SL.connect(name);
+        } catch (e) {
+          console.error("[ShadowLend] wallet connect failed:", e);
+          showToast("Connect failed", e?.message || String(e));
+          return;
+        }
+
+        // The wallet is connected at this point — never let a follow-up
+        // on-chain read flip the UI back to a "failed" state.
+        state.wallet = w;
+        const btn = document.getElementById("connectBtn");
+        btn.innerHTML = `<span class="pulse-dot"></span>${shortAddress(
+          w.publicKey
+        )}`;
+        btn.classList.add("connected");
+        showToast(
+          "Wallet connected",
+          `${name[0].toUpperCase() + name.slice(1)} · ${shortAddress(w.publicKey)}`
+        );
+        try {
           await refreshUserState();
         } catch (e) {
-          showToast("Connect failed", e?.message || String(e));
+          console.error("[ShadowLend] post-connect state load failed:", e);
+          showToast(
+            "Connected — limited data",
+            "Wallet is linked, but on-chain stats could not be loaded right now."
+          );
         }
       }
 

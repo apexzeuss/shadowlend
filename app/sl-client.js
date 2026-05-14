@@ -66,7 +66,10 @@ async function ensureReadProgram() {
   if (readProgram) return readProgram;
   await loadIdl();
   if (!idl) return null;
-  readProgram = new anchor.Program(idl, PROGRAM_ID, readonlyProvider());
+  // anchor 0.30+ takes the program id from `idl.address`; the constructor is
+  // `new Program(idl, provider)` — passing a separate program id silently
+  // makes the PublicKey the "provider" and breaks every later call.
+  readProgram = new anchor.Program(idl, readonlyProvider());
   return readProgram;
 }
 
@@ -81,7 +84,7 @@ function buildProgram() {
     },
     { commitment: "confirmed" }
   );
-  return new anchor.Program(idl, PROGRAM_ID, provider);
+  return new anchor.Program(idl, provider);
 }
 
 // Returns whichever program is appropriate for reads (prefers the signing
@@ -95,24 +98,72 @@ async function readClient() {
 export function detectInstalledWallets() {
   const list = [];
   if (window.solflare?.isSolflare) list.push("solflare");
-  if (window.phantom?.solana?.isPhantom) list.push("phantom");
+  // Phantom injects at window.phantom.solana, and also (older builds /
+  // some setups) at the legacy window.solana.
+  if (window.phantom?.solana?.isPhantom || window.solana?.isPhantom)
+    list.push("phantom");
   if (window.backpack?.isBackpack) list.push("backpack");
   return list;
 }
 
 function adapterFor(name) {
   if (name === "solflare") return window.solflare;
-  if (name === "phantom") return window.phantom?.solana;
+  if (name === "phantom")
+    return window.phantom?.solana ||
+      (window.solana?.isPhantom ? window.solana : null);
   if (name === "backpack") return window.backpack;
   return null;
 }
 
+// Guards against a second connect() landing while the wallet popup from the
+// first is still open — that overlap is itself a common source of the opaque
+// "Unexpected error" (-32603).
+let connecting = null;
+
 export async function connect(name) {
+  if (connecting) return connecting;
+  connecting = doConnect(name).finally(() => {
+    connecting = null;
+  });
+  return connecting;
+}
+
+async function doConnect(name) {
   const adapter = adapterFor(name);
   if (!adapter) throw new Error(`${name} is not installed`);
-  await adapter.connect();
-  const pk = adapter.publicKey || adapter.publicKey;
-  if (!pk) throw new Error("wallet returned no publicKey");
+
+  let resp;
+  // If the wallet is already authorized for this site, reuse that session —
+  // calling connect() again on an already-connected adapter is another way
+  // wallets throw "Unexpected error".
+  if (adapter.isConnected && adapter.publicKey) {
+    resp = { publicKey: adapter.publicKey };
+  } else {
+    try {
+      resp = await adapter.connect();
+    } catch (e) {
+      // Phantom/Solflare collapse a range of wallet-side problems into an
+      // opaque `{ code: -32603, message: "Unexpected error" }` — a sleeping
+      // extension service worker, stale connection state, or an imported
+      // account that can't sign. Retry once (covers the transient wake-up
+      // case), then fail with something the user can actually act on.
+      const opaque =
+        e?.code === -32603 || /unexpected error/i.test(e?.message || "");
+      if (!opaque) throw e;
+      try {
+        resp = await adapter.connect();
+      } catch (e2) {
+        throw new Error(
+          `${name} refused the connection (code ${e2?.code ?? "?"}). ` +
+            "Update the wallet extension, switch to a non-imported account, " +
+            "or reload the page and retry."
+        );
+      }
+    }
+  }
+
+  const pk = resp?.publicKey || adapter.publicKey;
+  if (!pk) throw new Error(`${name} connected but returned no public key`);
   wallet = {
     name,
     publicKey: new PublicKey(pk.toString()),

@@ -1,13 +1,11 @@
-// ShadowLend client — wallet detection, faucet claim, on-chain user stats.
+// ShadowLend client — wallet detection + on-chain multi-asset markets.
 // Designed to run from a plain static HTML page (no bundler), pulling deps
-// from esm.sh. The IDL is fetched from /idl/shadow_lend.json after `anchor build`.
+// from esm.sh. The IDL is fetched from /idl/shadow_lend.json.
 
 import {
   Connection,
   PublicKey,
   SystemProgram,
-  SYSVAR_RENT_PUBKEY,
-  Transaction,
 } from "https://esm.sh/@solana/web3.js@1.95.8";
 import * as anchor from "https://esm.sh/@coral-xyz/anchor@0.30.1?bundle";
 import {
@@ -18,13 +16,16 @@ import {
 } from "https://esm.sh/@solana/spl-token@0.4.14?bundle";
 
 const CONFIG = window.SHADOW_LEND_CONFIG;
-const FAUCET_SEED = new TextEncoder().encode("faucet");
-const MINT_AUTH_SEED = new TextEncoder().encode("mint-auth");
+const MARKET_SEED = new TextEncoder().encode("market");
+const AUTH_SEED = new TextEncoder().encode("auth");
+const VAULT_SEED = new TextEncoder().encode("vault");
 const CLAIM_SEED = new TextEncoder().encode("claim");
+const POSITION_SEED = new TextEncoder().encode("position");
 const STATS_SEED = new TextEncoder().encode("stats");
 
 const PROGRAM_ID = new PublicKey(CONFIG.programId);
 const connection = new Connection(CONFIG.rpcUrl, "confirmed");
+const MARKETS = CONFIG.markets || [];
 
 let idl = null;
 let program = null; // signing program (built once a wallet connects)
@@ -66,9 +67,6 @@ async function ensureReadProgram() {
   if (readProgram) return readProgram;
   await loadIdl();
   if (!idl) return null;
-  // anchor 0.30+ takes the program id from `idl.address`; the constructor is
-  // `new Program(idl, provider)` — passing a separate program id silently
-  // makes the PublicKey the "provider" and breaks every later call.
   readProgram = new anchor.Program(idl, readonlyProvider());
   return readProgram;
 }
@@ -188,113 +186,187 @@ export function getWallet() {
   return wallet;
 }
 
-// ── PDA helpers ────────────────────────────────────────────
-export function pdas(userPk) {
-  const [faucet] = PublicKey.findProgramAddressSync([FAUCET_SEED], PROGRAM_ID);
-  const [mintAuthority] = PublicKey.findProgramAddressSync(
-    [MINT_AUTH_SEED],
+// ── Markets + PDA helpers ──────────────────────────────────
+export function getMarkets() {
+  return MARKETS;
+}
+
+export function getMarketConfig(marketId) {
+  return MARKETS.find((m) => m.id === marketId) || null;
+}
+
+// All program addresses tied to a given market (and optionally a user).
+export function marketPdas(marketId, userPk) {
+  const cfg = getMarketConfig(marketId);
+  if (!cfg) throw new Error(`unknown market: ${marketId}`);
+  const mint = new PublicKey(cfg.mint);
+  const mintBuf = mint.toBuffer();
+  const [market] = PublicKey.findProgramAddressSync(
+    [MARKET_SEED, mintBuf],
     PROGRAM_ID
   );
-  const out = { faucet, mintAuthority };
+  const [authority] = PublicKey.findProgramAddressSync(
+    [AUTH_SEED, mintBuf],
+    PROGRAM_ID
+  );
+  const [vault] = PublicKey.findProgramAddressSync(
+    [VAULT_SEED, mintBuf],
+    PROGRAM_ID
+  );
+  const out = { cfg, mint, market, authority, vault };
   if (userPk) {
     [out.claim] = PublicKey.findProgramAddressSync(
-      [CLAIM_SEED, userPk.toBuffer()],
+      [CLAIM_SEED, userPk.toBuffer(), mintBuf],
       PROGRAM_ID
     );
-    [out.stats] = PublicKey.findProgramAddressSync(
-      [STATS_SEED, userPk.toBuffer()],
+    [out.position] = PublicKey.findProgramAddressSync(
+      [POSITION_SEED, userPk.toBuffer(), mintBuf],
       PROGRAM_ID
     );
+    out.ata = getAssociatedTokenAddressSync(mint, userPk);
   }
   return out;
 }
 
+function statsPda(userPk) {
+  const [stats] = PublicKey.findProgramAddressSync(
+    [STATS_SEED, userPk.toBuffer()],
+    PROGRAM_ID
+  );
+  return stats;
+}
+
+const pow10 = (n) => new anchor.BN(10).pow(new anchor.BN(n));
+// UI amount (whole tokens, may be fractional) → base-unit BN.
+function toBase(uiAmount, decimals) {
+  const [whole, frac = ""] = String(uiAmount).split(".");
+  const fracPadded = (frac + "0".repeat(decimals)).slice(0, decimals);
+  return new anchor.BN(whole || "0")
+    .mul(pow10(decimals))
+    .add(new anchor.BN(fracPadded || "0"));
+}
+const fromBase = (bn, decimals) =>
+  Number(bn.toString()) / Math.pow(10, decimals);
+
 // ── On-chain reads (work without a connected wallet) ───────
-export async function fetchFaucetConfig() {
+export async function fetchMarket(marketId) {
   const p = await readClient();
   if (!p) return null;
   try {
-    const { faucet } = pdas();
-    return await p.account.faucetConfig.fetch(faucet);
+    const { market } = marketPdas(marketId);
+    return await p.account.market.fetch(market);
   } catch {
     return null;
   }
 }
 
-export async function isFaucetReady() {
-  return (await fetchFaucetConfig()) !== null;
+// Every market, with its on-chain config merged onto the static config.
+export async function fetchAllMarkets() {
+  return Promise.all(
+    MARKETS.map(async (m) => ({ ...m, onchain: await fetchMarket(m.id) }))
+  );
 }
 
-export async function fetchClaimReceipt() {
+// True once at least one market exists on-chain.
+export async function isFaucetReady() {
+  for (const m of MARKETS) {
+    if (await fetchMarket(m.id)) return true;
+  }
+  return false;
+}
+
+export async function fetchClaimReceipt(marketId) {
   const p = await readClient();
   if (!p || !wallet) return null;
   try {
-    const { claim } = pdas(wallet.publicKey);
+    const { claim } = marketPdas(marketId, wallet.publicKey);
     return await p.account.claimReceipt.fetch(claim);
   } catch {
     return null;
   }
 }
 
-export async function fetchUserStats() {
+export async function fetchPosition(marketId) {
   const p = await readClient();
   if (!p || !wallet) return null;
   try {
-    const { stats } = pdas(wallet.publicKey);
-    return await p.account.userStats.fetch(stats);
+    const { position } = marketPdas(marketId, wallet.publicKey);
+    const pos = await p.account.position.fetch(position);
+    const dec = getMarketConfig(marketId).decimals;
+    return {
+      supplied: fromBase(pos.supplied, dec),
+      borrowed: fromBase(pos.borrowed, dec),
+      suppliedRaw: pos.supplied,
+      borrowedRaw: pos.borrowed,
+    };
   } catch {
     return null;
   }
 }
 
-export async function fetchSlBalance() {
-  if (!wallet) return null;
-  const faucet = await fetchFaucetConfig();
-  if (!faucet) return null;
+export async function fetchTokenBalance(marketId) {
+  if (!wallet) return 0;
   try {
-    const ata = getAssociatedTokenAddressSync(faucet.mint, wallet.publicKey);
+    const { mint } = marketPdas(marketId);
+    const ata = getAssociatedTokenAddressSync(mint, wallet.publicKey);
     const acct = await getAccount(connection, ata);
-    return Number(acct.amount) / 1e9;
+    const dec = getMarketConfig(marketId).decimals;
+    return Number(acct.amount) / Math.pow(10, dec);
   } catch {
     return 0;
   }
 }
 
-// ── Transactions ───────────────────────────────────────────
-export async function claimFaucet() {
-  if (!program || !wallet) throw new Error("not connected");
-  const faucet = await fetchFaucetConfig();
-  if (!faucet) throw new Error("faucet not initialized");
-  const { faucet: faucetPda, mintAuthority, claim } = pdas(wallet.publicKey);
-  const ata = getAssociatedTokenAddressSync(faucet.mint, wallet.publicKey);
-
-  return await program.methods
-    .claimFaucet()
-    .accounts({
-      user: wallet.publicKey,
-      faucet: faucetPda,
-      mint: faucet.mint,
-      mintAuthority,
-      recipientAta: ata,
-      receipt: claim,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-      rent: SYSVAR_RENT_PUBKEY,
+// One round-trip the UI can lean on: per-market state for the connected wallet.
+export async function fetchUserMarketState() {
+  if (!wallet) return [];
+  return Promise.all(
+    MARKETS.map(async (m) => {
+      const [onchain, receipt, position, balance] = await Promise.all([
+        fetchMarket(m.id),
+        fetchClaimReceipt(m.id),
+        fetchPosition(m.id),
+        fetchTokenBalance(m.id),
+      ]);
+      const supplied = position?.supplied || 0;
+      const borrowed = position?.borrowed || 0;
+      // Health factor: collateral value at max LTV divided by debt. >1 is safe.
+      const maxLtv = m.maxLtvBps / 10_000;
+      const health =
+        borrowed > 0 ? (supplied * maxLtv) / borrowed : null;
+      return {
+        ...m,
+        onchain,
+        claimed: !!receipt,
+        balance,
+        supplied,
+        borrowed,
+        health,
+        borrowable: Math.max(0, supplied * maxLtv - borrowed),
+      };
     })
-    .rpc();
+  );
+}
+
+// ── User stats (the private-action / proof demo) ───────────
+export async function fetchUserStats() {
+  const p = await readClient();
+  if (!p || !wallet) return null;
+  try {
+    return await p.account.userStats.fetch(statsPda(wallet.publicKey));
+  } catch {
+    return null;
+  }
 }
 
 export async function ensureStatsInited() {
   if (!program || !wallet) return false;
-  const existing = await fetchUserStats();
-  if (existing) return true;
-  const { stats } = pdas(wallet.publicKey);
+  if (await fetchUserStats()) return true;
   await program.methods
     .initUserStats()
     .accounts({
       user: wallet.publicKey,
-      stats,
+      stats: statsPda(wallet.publicKey),
       systemProgram: SystemProgram.programId,
     })
     .rpc();
@@ -304,13 +376,73 @@ export async function ensureStatsInited() {
 export async function recordAction(kind, healthBps = 0) {
   if (!program || !wallet) throw new Error("not connected");
   await ensureStatsInited();
-  const { stats } = pdas(wallet.publicKey);
   const variant = { [kind]: {} }; // anchor enum encoding
   return await program.methods
     .recordAction(variant, healthBps)
-    .accounts({ user: wallet.publicKey, stats })
+    .accounts({ user: wallet.publicKey, stats: statsPda(wallet.publicKey) })
     .rpc();
 }
+
+// ── Transactions ───────────────────────────────────────────
+export async function claimFaucet(marketId) {
+  if (!program || !wallet) throw new Error("not connected");
+  const { cfg, mint, market, authority, claim, ata } = marketPdas(
+    marketId,
+    wallet.publicKey
+  );
+  if (!(await fetchMarket(marketId)))
+    throw new Error(`${cfg.label} market not initialized`);
+
+  return await program.methods
+    .claimFaucet()
+    .accounts({
+      user: wallet.publicKey,
+      market,
+      mint,
+      authority,
+      recipientAta: ata,
+      receipt: claim,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+// supply / withdraw / borrow / repay all hit the same account context.
+async function modifyPosition(method, marketId, uiAmount) {
+  if (!program || !wallet) throw new Error("not connected");
+  const { cfg, mint, market, authority, vault, position, ata } = marketPdas(
+    marketId,
+    wallet.publicKey
+  );
+  const amount = toBase(uiAmount, cfg.decimals);
+  if (amount.lten(0)) throw new Error("amount must be greater than zero");
+
+  return await program.methods[method](amount)
+    .accounts({
+      user: wallet.publicKey,
+      market,
+      mint,
+      position,
+      vault,
+      authority,
+      userAta: ata,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export const supply = (marketId, uiAmount) =>
+  modifyPosition("supply", marketId, uiAmount);
+export const withdraw = (marketId, uiAmount) =>
+  modifyPosition("withdraw", marketId, uiAmount);
+export const borrow = (marketId, uiAmount) =>
+  modifyPosition("borrow", marketId, uiAmount);
+export const repay = (marketId, uiAmount) =>
+  modifyPosition("repay", marketId, uiAmount);
 
 // ── Local history (IndexedDB) ──────────────────────────────
 const DB_NAME = "shadowlend";
@@ -365,20 +497,30 @@ export async function loadHistory(limit = 25) {
   return result.sort((a, b) => b.at - a.at).slice(0, limit);
 }
 
-// Expose for debugging in console.
+// Expose for inline scripts + console debugging.
 window.SL = {
   connect,
   disconnect,
   getWallet,
   detectInstalledWallets,
-  fetchFaucetConfig,
+  getMarkets,
+  getMarketConfig,
+  marketPdas,
+  fetchMarket,
+  fetchAllMarkets,
   isFaucetReady,
   fetchClaimReceipt,
+  fetchPosition,
+  fetchTokenBalance,
+  fetchUserMarketState,
   fetchUserStats,
-  fetchSlBalance,
-  claimFaucet,
-  recordAction,
   ensureStatsInited,
+  recordAction,
+  claimFaucet,
+  supply,
+  withdraw,
+  borrow,
+  repay,
   loadHistory,
   appendHistory,
   PROGRAM_ID,

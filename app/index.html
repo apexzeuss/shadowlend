@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Credit, hidden in plain sight</title>
-    <script src="./config.js?v=3"></script>
+    <script src="./config.js?v=4"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -2475,7 +2475,7 @@
         <div class="modal-head">
           <div>
             <div class="modal-title" id="modalTitle">Supply SOL</div>
-            <div class="modal-sub">Amount is encrypted locally first</div>
+            <div class="modal-sub">Real on-chain transfer on devnet</div>
           </div>
           <button
             class="modal-close"
@@ -2497,16 +2497,16 @@
         </div>
         <div class="modal-facts">
           <div class="modal-fact">
-            <span class="k">Encryption</span>
-            <span class="v green">ElGamal → MXE</span>
+            <span class="k">Network</span>
+            <span class="v green">Solana devnet</span>
           </div>
           <div class="modal-fact">
-            <span class="k">Rule checked</span>
-            <span class="v" id="modalConstraint">LTV within threshold</span>
+            <span class="k">This action</span>
+            <span class="v" id="modalConstraint">—</span>
           </div>
           <div class="modal-fact">
-            <span class="k">On-chain state</span>
-            <span class="v">Encrypted only</span>
+            <span class="k">Wallet cost</span>
+            <span class="v">~0.003 SOL fee + rent</span>
           </div>
         </div>
         <button
@@ -2552,56 +2552,51 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=3"></script>
+    <script type="module" src="./sl-client.js?v=4"></script>
     <script>
       // ── Data ────────────────────────────────────────────
-      const markets = [
-        {
-          id: "SOL",
-          name: "Solana",
-          sub: "Native collateral",
+      // Display-only flavor, keyed by the market id in config.js. The real
+      // numbers (mint, LTV, claim amount, on-chain totals) come from the chain.
+      const MARKET_META = {
+        sol: {
           mark: "sol",
-          supply: "3.42%",
-          borrow: "5.18%",
-          liquidity: "$28.4M",
-          ltv: "80%",
+          short: "SOL",
+          sub: "Native collateral",
           oracle: "Pyth SOL/USD",
-          reserve: "12%",
-          threshold: "86%",
           spark: [22, 26, 24, 29, 28, 34, 31, 38, 36, 41, 39, 45],
           copy: "Native collateral market with private LTV checks through the MXE proof path.",
         },
-        {
-          id: "USDC",
-          name: "USD Coin",
-          sub: "Stable borrow leg",
+        usdc: {
           mark: "usdc",
-          supply: "5.71%",
-          borrow: "7.83%",
-          liquidity: "$31.8M",
-          ltv: "85%",
+          short: "USD",
+          sub: "Stable borrow leg",
           oracle: "Pyth USDC/USD",
-          reserve: "8%",
-          threshold: "90%",
           spark: [40, 38, 41, 42, 39, 43, 44, 41, 45, 46, 44, 47],
           copy: "Stable asset market for debt and liquidity management with encrypted position accounting.",
         },
-        {
-          id: "WBTC",
-          name: "Wrapped Bitcoin",
-          sub: "Conservative collateral",
+        btc: {
           mark: "wbtc",
-          supply: "1.94%",
-          borrow: "3.27%",
-          liquidity: "$18.6M",
-          ltv: "75%",
+          short: "BTC",
+          sub: "Conservative collateral",
           oracle: "Pyth BTC/USD",
-          reserve: "15%",
-          threshold: "82%",
           spark: [30, 32, 31, 35, 34, 33, 36, 38, 37, 40, 39, 42],
           copy: "Lower-LTV collateral market for larger positions and conservative private borrowing.",
         },
-      ];
+      };
+
+      // markets[]: static config × display meta. On-chain state is merged in
+      // later by loadMarketData() / refreshUserState().
+      const markets = (window.SHADOW_LEND_CONFIG.markets || []).map((m) => ({
+        ...m,
+        ...(MARKET_META[m.id] || {}),
+        ltvPct: (m.maxLtvBps / 100).toFixed(0) + "%",
+        onchain: null,
+        balance: 0,
+        supplied: 0,
+        borrowed: 0,
+        claimed: false,
+        health: null,
+      }));
 
       const proofJobs = [
         ["done", "LTV check", "SOL borrow · 0x8f3a…a4e2", "SOL", "00:02"],
@@ -2611,13 +2606,17 @@
 
       const state = {
         wallet: null,
-        receipt: null,
         stats: null,
-        balance: null,
-        faucetReady: null, // null = not probed, true = deployed, false = not deployed
+        ready: null, // null = not probed, true/false = markets on-chain?
       };
       let selectedMarket = markets[0];
-      let currentAction = "deposit";
+      let currentAction = "supply";
+
+      const fmt = (n, d = 2) =>
+        Number(n || 0).toLocaleString(undefined, {
+          maximumFractionDigits: d,
+        });
+      const findMarket = (id) => markets.find((m) => m.id === id) || markets[0];
 
       const KNOWN_WALLETS = [
         { id: "solflare", label: "Solflare", check: () => window.solflare?.isSolflare },
@@ -2644,8 +2643,22 @@
         const container = document.getElementById("marketCards");
         container.innerHTML = markets
           .map((m, i) => {
-            const path = sparkPath(m.spark);
+            const path = sparkPath(m.spark || [1, 1, 1]);
             const isSel = m.id === selectedMarket.id;
+            const oc = m.onchain;
+            const dec = m.decimals;
+            const totalSupplied = oc
+              ? Number(oc.totalSupplied.toString()) / 10 ** dec
+              : 0;
+            const totalBorrowed = oc
+              ? Number(oc.totalBorrowed.toString()) / 10 ** dec
+              : 0;
+            const yours =
+              state.wallet && (m.supplied > 0 || m.borrowed > 0)
+                ? `<div class="market-yours">Your position · supplied ${fmt(
+                    m.supplied
+                  )} · borrowed ${fmt(m.borrowed)}</div>`
+                : "";
             return `
             <article
               class="market-card reveal ${isSel ? "selected" : ""}"
@@ -2654,8 +2667,8 @@
               onclick="selectMarket('${m.id}')"
             >
               <div class="market-head">
-                <div class="asset-mark ${m.mark}">${m.id === "USDC" ? "USD" : m.id.replace("W", "")}</div>
-                <div class="market-tag">Max LTV · ${m.ltv}</div>
+                <div class="asset-mark ${m.mark}">${m.short}</div>
+                <div class="market-tag">Max LTV · ${m.ltvPct}</div>
               </div>
               <div class="market-name">${m.name}</div>
               <div class="market-sub">${m.sub} · ${m.oracle}</div>
@@ -2667,38 +2680,31 @@
                       <stop offset="100%" stop-color="rgba(230,230,234,0)" />
                     </linearGradient>
                   </defs>
-                  <path
-                    d="${path} L240 56 L0 56 Z"
-                    fill="url(#sg-${m.id})"
-                  />
-                  <path
-                    d="${path}"
-                    fill="none"
-                    stroke="rgba(230,230,234,0.9)"
-                    stroke-width="1.5"
-                  />
+                  <path d="${path} L240 56 L0 56 Z" fill="url(#sg-${m.id})" />
+                  <path d="${path}" fill="none" stroke="rgba(230,230,234,0.9)" stroke-width="1.5" />
                 </svg>
               </div>
               <div class="market-metrics">
                 <div class="market-metric">
-                  <div class="k">Supply APY</div>
-                  <div class="v green">${m.supply}</div>
+                  <div class="k">Max LTV</div>
+                  <div class="v green">${m.ltvPct}</div>
                 </div>
                 <div class="market-metric">
-                  <div class="k">Borrow APR</div>
-                  <div class="v amber">${m.borrow}</div>
+                  <div class="k">Per claim</div>
+                  <div class="v">${fmt(m.claimUi, 0)}</div>
                 </div>
                 <div class="market-metric">
-                  <div class="k">Liquidity</div>
-                  <div class="v">${m.liquidity}</div>
+                  <div class="k">Total supplied</div>
+                  <div class="v">${fmt(totalSupplied)}</div>
                 </div>
                 <div class="market-metric">
-                  <div class="k">Reserve</div>
-                  <div class="v">${m.reserve}</div>
+                  <div class="k">Total borrowed</div>
+                  <div class="v">${fmt(totalBorrowed)}</div>
                 </div>
               </div>
+              ${yours}
               <div class="market-actions">
-                <button class="market-btn" onclick="openModal(event, 'deposit', '${m.id}')">Supply</button>
+                <button class="market-btn" onclick="openModal(event, 'supply', '${m.id}')">Supply</button>
                 <button class="market-btn borrow" onclick="openModal(event, 'borrow', '${m.id}')">Borrow</button>
               </div>
             </article>
@@ -2831,9 +2837,19 @@
       async function disconnectWallet() {
         if (window.SL) await window.SL.disconnect();
         state.wallet = null;
-        state.receipt = null;
         state.stats = null;
-        state.balance = null;
+        // Drop this wallet's per-market position data, keep market totals.
+        markets.forEach((m) =>
+          Object.assign(m, {
+            balance: 0,
+            supplied: 0,
+            borrowed: 0,
+            claimed: false,
+            health: null,
+            borrowable: 0,
+          })
+        );
+        renderMarkets();
         const btn = document.getElementById("connectBtn");
         btn.textContent = "Connect wallet";
         btn.classList.remove("connected");
@@ -2849,22 +2865,46 @@
       }
 
       // ── On-chain state load + render ────────────────────
+      // Disconnected: just the market totals, so the cards aren't blank.
+      async function loadMarketData() {
+        if (!window.SL) return;
+        try {
+          const all = await window.SL.fetchAllMarkets();
+          all.forEach((a) => {
+            Object.assign(findMarket(a.id), { onchain: a.onchain });
+          });
+          state.ready = all.some((a) => a.onchain);
+        } catch (e) {
+          console.warn("loadMarketData:", e);
+        }
+        renderMarkets();
+      }
+
+      // Connected: per-market balance / position / claim state for this wallet.
       async function refreshUserState() {
         if (!state.wallet || !window.SL) return;
         try {
-          const [ready, receipt, stats, balance] = await Promise.all([
-            window.SL.isFaucetReady(),
-            window.SL.fetchClaimReceipt(),
+          const [marketState, stats] = await Promise.all([
+            window.SL.fetchUserMarketState(),
             window.SL.fetchUserStats(),
-            window.SL.fetchSlBalance(),
           ]);
-          state.faucetReady = ready;
-          state.receipt = receipt;
+          marketState.forEach((ms) => {
+            Object.assign(findMarket(ms.id), {
+              onchain: ms.onchain,
+              balance: ms.balance,
+              supplied: ms.supplied,
+              borrowed: ms.borrowed,
+              claimed: ms.claimed,
+              health: ms.health,
+              borrowable: ms.borrowable,
+            });
+          });
           state.stats = stats;
-          state.balance = balance;
+          state.ready = true;
         } catch (e) {
           console.warn("refreshUserState:", e);
         }
+        renderMarkets();
         renderPositionConnected();
       }
 
@@ -2872,123 +2912,99 @@
         const body = document.getElementById("positionBody");
         body.className = "";
 
+        const rows = markets
+          .map((m) => {
+            if (!m.claimed) {
+              return `
+                <div class="claim-card">
+                  <div class="label">${m.label} faucet</div>
+                  <div class="headline">Claim ${fmt(m.claimUi, 0)} ${m.label}</div>
+                  <div class="sub">
+                    One claim per wallet. Your wallet pays ~0.003 devnet SOL for
+                    the network fee and account rent, this isn't gasless. Empty?
+                    Top up at
+                    <a href="https://faucet.solana.com" target="_blank"
+                      rel="noopener"
+                      style="color: inherit; text-decoration: underline"
+                      >faucet.solana.com</a>.
+                  </div>
+                  <div class="actions">
+                    <button class="claim-btn" data-claim="${m.id}"
+                      onclick="claimMarket('${m.id}')">
+                      Claim ${fmt(m.claimUi, 0)} ${m.label}
+                    </button>
+                  </div>
+                </div>`;
+            }
+            const healthTxt =
+              m.borrowed > 0
+                ? m.health == null
+                  ? "—"
+                  : m.health.toFixed(2)
+                : "no debt";
+            return `
+              <div class="pos-rows">
+                <div class="pos-row">
+                  <div>
+                    <div class="pos-key">${m.label} · wallet balance</div>
+                    <div class="pos-hash">max LTV ${m.ltvPct} · health ${healthTxt}</div>
+                  </div>
+                  <div class="pos-val green">${fmt(m.balance)}</div>
+                </div>
+                <div class="pos-row">
+                  <div>
+                    <div class="pos-key">Supplied / Borrowed</div>
+                    <div class="pos-hash">borrowable now: ${fmt(
+                      m.borrowable || 0
+                    )} ${m.label}</div>
+                  </div>
+                  <div class="pos-val">${fmt(m.supplied)} / ${fmt(m.borrowed)}</div>
+                </div>
+                <div class="market-actions" style="margin-top: 4px">
+                  <button class="market-btn" onclick="openModal(event,'supply','${m.id}')">Supply</button>
+                  <button class="market-btn borrow" onclick="openModal(event,'borrow','${m.id}')">Borrow</button>
+                  ${
+                    m.supplied > 0
+                      ? `<button class="market-btn" onclick="openModal(event,'withdraw','${m.id}')">Withdraw</button>`
+                      : ""
+                  }
+                  ${
+                    m.borrowed > 0
+                      ? `<button class="market-btn" onclick="openModal(event,'repay','${m.id}')">Repay</button>`
+                      : ""
+                  }
+                </div>
+              </div>`;
+          })
+          .join("");
+
         const stats = state.stats;
-        const balance = state.balance;
-        const hasReceipt = !!state.receipt;
-        const claimAmt = window.SHADOW_LEND_CONFIG.claimAmountUi;
-
-        let claimBlock = "";
-        if (!hasReceipt) {
-          if (state.faucetReady === false) {
-            claimBlock = `
-              <div class="claim-card" data-state="pending">
-                <div class="label">Test tokens</div>
-                <div class="headline">Faucet pending deploy</div>
-                <div class="sub">
-                  The SL faucet hasn't been initialized on
-                  ${window.SHADOW_LEND_CONFIG.cluster} yet. Once the program
-                  is deployed and the mint is created, this card will let you
-                  claim ${claimAmt.toLocaleString()} SL.
-                </div>
-              </div>`;
-          } else {
-            claimBlock = `
-              <div class="claim-card">
-                <div class="label">Test tokens</div>
-                <div class="headline">Claim ${claimAmt.toLocaleString()} SL</div>
-                <div class="sub">
-                  Each wallet can claim once. SL lets you try the supply and
-                  borrow flows without holding real assets.
-                </div>
-                <div class="sub" style="margin-top: 8px; opacity: 0.75">
-                  Your wallet pays ~0.003 devnet SOL for the network fee and
-                  account rent — this isn't gasless. Wallet empty? Grab devnet
-                  SOL at
-                  <a
-                    href="https://faucet.solana.com"
-                    target="_blank"
-                    rel="noopener"
-                    style="color: inherit; text-decoration: underline"
-                    >faucet.solana.com</a
-                  >.
-                </div>
-                <div class="actions">
-                  <button class="claim-btn" id="claimBtn" onclick="claimSL()">
-                    Claim ${claimAmt.toLocaleString()} SL
-                  </button>
-                </div>
-              </div>`;
-          }
-        }
-
         const statsRows = stats
-          ? `
-          <div class="pos-rows">
-            <div class="pos-row">
-              <div>
-                <div class="pos-key">SL balance</div>
-                <div class="pos-hash">${
-                  hasReceipt
-                    ? "Claimed " + new Date(
-                        state.receipt.claimedAt.toNumber() * 1000
-                      ).toLocaleString()
-                    : "Unclaimed"
-                }</div>
+          ? `<div class="pos-rows">
+              <div class="pos-row">
+                <div>
+                  <div class="pos-key">Private actions recorded</div>
+                  <div class="pos-hash">UserStats PDA · proofs ${stats.proofsSubmitted}</div>
+                </div>
+                <div class="pos-val">${stats.supplies}·${stats.borrows}·${stats.repays}</div>
               </div>
-              <div class="pos-val green">${(balance ?? 0).toLocaleString()}</div>
-            </div>
-            <div class="pos-row">
-              <div>
-                <div class="pos-key">Proofs submitted</div>
-                <div class="pos-hash">on-chain counter</div>
-              </div>
-              <div class="pos-val">${stats.proofsSubmitted.toString()}</div>
-            </div>
-            <div class="pos-row">
-              <div>
-                <div class="pos-key">Supplies / Borrows / Repays</div>
-                <div class="pos-hash">UserStats PDA</div>
-              </div>
-              <div class="pos-val">${stats.supplies}·${stats.borrows}·${stats.repays}</div>
-            </div>
-            <div class="pos-row">
-              <div>
-                <div class="pos-key">Last health</div>
-                <div class="pos-hash">private to MXE · last public proof</div>
-              </div>
-              <div class="pos-val green">${(stats.lastHealthBps / 10000).toFixed(2)}</div>
-            </div>
-          </div>`
-          : `
-          <div class="pos-rows">
-            <div class="pos-row">
-              <div>
-                <div class="pos-key">SL balance</div>
-                <div class="pos-hash">${hasReceipt ? "Claimed" : "Unclaimed"}</div>
-              </div>
-              <div class="pos-val green">${(balance ?? 0).toLocaleString()}</div>
-            </div>
-            <div class="pos-row">
-              <div>
-                <div class="pos-key">On-chain stats</div>
-                <div class="pos-hash">No actions yet</div>
-              </div>
-              <div class="pos-val">—</div>
-            </div>
-          </div>`;
+            </div>`
+          : "";
 
-        body.innerHTML = claimBlock + statsRows + `<div class="history-list" id="historyList"></div>`;
+        body.innerHTML =
+          rows + statsRows + `<div class="history-list" id="historyList"></div>`;
 
-        // Animate gauge: scale health (last_health_bps / 10000) into the arc.
+        // Gauge: the lowest health factor across markets that carry debt.
+        const healths = markets
+          .filter((m) => m.borrowed > 0 && m.health != null)
+          .map((m) => m.health);
+        const worst = healths.length ? Math.min(...healths) : null;
         const total = 528;
-        const ratio = stats
-          ? Math.min(1, stats.lastHealthBps / 25000)
-          : 0;
+        const ratio = worst == null ? 0 : Math.min(1, worst / 2);
         document.getElementById("gaugeArc").style.strokeDashoffset =
           total * (1 - ratio);
-        document.getElementById("gaugeVal").textContent = stats
-          ? (stats.lastHealthBps / 10000).toFixed(2)
-          : "—";
+        document.getElementById("gaugeVal").textContent =
+          worst == null ? "—" : worst.toFixed(2);
 
         renderHistory();
       }
@@ -3008,7 +3024,9 @@
               const when = new Date(e.at).toLocaleTimeString();
               const detail =
                 e.kind === "claim"
-                  ? `${e.amount.toLocaleString()} SL · ${(e.signature || "").slice(0, 8)}…`
+                  ? `${Number(e.amount).toLocaleString()} ${e.asset || "SL"} · ${(
+                      e.signature || ""
+                    ).slice(0, 8)}…`
                   : `${e.amount ?? ""} ${e.asset ?? ""}`.trim();
               return `
                 <div class="history-row">
@@ -3020,32 +3038,31 @@
             .join("");
       }
 
-      async function claimSL() {
+      async function claimMarket(marketId) {
         if (!state.wallet || !window.SL) return;
-        const btn = document.getElementById("claimBtn");
+        const m = findMarket(marketId);
+        const btn = document.querySelector(`[data-claim="${marketId}"]`);
         btn?.classList.add("loading");
         if (btn) btn.textContent = "Confirm in wallet…";
         try {
-          const sig = await window.SL.claimFaucet();
+          const sig = await window.SL.claimFaucet(marketId);
           await window.SL.appendHistory({
             kind: "claim",
-            amount: window.SHADOW_LEND_CONFIG.claimAmountUi,
+            amount: m.claimUi,
+            asset: m.label,
             signature: sig,
           });
           showToast(
-            "10,000 SL claimed",
+            `${fmt(m.claimUi, 0)} ${m.label} claimed`,
             `Sig ${sig.slice(0, 8)}… · refreshing on-chain state.`
           );
           await refreshUserState();
         } catch (e) {
           btn?.classList.remove("loading");
+          if (btn) btn.textContent = `Claim ${fmt(m.claimUi, 0)} ${m.label}`;
           const msg = e?.message || String(e);
-          // Friendly hint for the common "faucet not initialized" case.
-          if (/faucet not initialized|not initialized|missing IDL/i.test(msg)) {
-            showToast(
-              "Faucet not deployed",
-              "The SL faucet hasn't been initialized on this cluster yet."
-            );
+          if (/already in use|already been processed/i.test(msg)) {
+            showToast("Already claimed", `This wallet already claimed ${m.label}.`);
           } else if (
             /insufficient|not enough|debit an account|prior credit/i.test(msg)
           ) {
@@ -3066,22 +3083,31 @@
         if (!state.wallet) {
           showToast(
             "Wallet required",
-            "Connect a wallet before preparing a private market action."
+            "Connect a wallet before a market action."
           );
           return;
         }
-        currentAction = action;
+        currentAction = action; // supply | borrow | withdraw | repay
         selectMarket(assetId);
-        const verb = action === "deposit" ? "Supply" : "Borrow";
-        document.getElementById("modalTitle").textContent = `${verb} ${assetId}`;
-        document.getElementById("inputToken").textContent = assetId;
+        const m = findMarket(assetId);
+        const verb = action[0].toUpperCase() + action.slice(1);
+        document.getElementById("modalTitle").textContent = `${verb} ${m.label}`;
+        document.getElementById("inputToken").textContent = m.label;
         const btn = document.getElementById("modalBtn");
-        btn.className = "modal-btn" + (action === "borrow" ? " borrow" : "");
-        document.getElementById("modalBtnText").textContent = `${verb} ${assetId}`;
+        btn.className =
+          "modal-btn" +
+          (action === "borrow" || action === "withdraw" ? " borrow" : "");
+        document.getElementById("modalBtnText").textContent = `${verb} ${m.label}`;
+        const hints = {
+          supply: `Deposits ${m.label} into the market vault as collateral.`,
+          borrow: `Up to ${m.ltvPct} of supplied ${m.label}. Borrowable now: ${fmt(
+            m.borrowable || 0
+          )}.`,
+          withdraw: `You have ${fmt(m.supplied)} ${m.label} supplied.`,
+          repay: `Outstanding debt: ${fmt(m.borrowed)} ${m.label}.`,
+        };
         document.getElementById("modalConstraint").textContent =
-          action === "deposit"
-            ? "Range proof + state write"
-            : "LTV within threshold";
+          hints[action] || "";
         document.getElementById("modalOverlay").classList.add("open");
         setTimeout(() => document.getElementById("amountInput").focus(), 120);
       }
@@ -3097,56 +3123,84 @@
           showToast("Invalid amount", "Enter an amount greater than zero.");
           return;
         }
+        if (!window.SL || !state.wallet) return;
+        const m = selectedMarket;
+        const action = currentAction; // supply | borrow | withdraw | repay
+        const verb = action[0].toUpperCase() + action.slice(1);
         const btn = document.getElementById("modalBtn");
         const btnText = document.getElementById("modalBtnText");
         btn.classList.add("loading");
-        btnText.textContent = "Encrypting locally…";
-        await sleep(600);
-        btnText.textContent = "Requesting proof…";
-        await sleep(750);
-        btnText.textContent = "Preparing transaction…";
-        await sleep(650);
+        btnText.textContent = "Confirm in wallet…";
 
-        const now = new Date();
-        const t = `${String(now.getMinutes()).padStart(2, "0")}:${String(
-          now.getSeconds()
-        ).padStart(2, "0")}`;
-        proofJobs.unshift([
-          "live",
-          currentAction === "deposit" ? "Supply proof" : "Borrow proof",
-          `${amount} ${selectedMarket.id} · ${randomHash()}`,
-          selectedMarket.id,
-          t,
-        ]);
-        renderProofs();
-        btn.classList.remove("loading");
-        document.getElementById("modalOverlay").classList.remove("open");
-        document.getElementById("amountInput").value = "";
-        btnText.textContent =
-          currentAction === "deposit"
-            ? `Supply ${selectedMarket.id}`
-            : `Borrow ${selectedMarket.id}`;
-        showToast(
-          "Proof job queued",
-          `${amount} ${selectedMarket.id} staged for private settlement.`
-        );
+        try {
+          const sig = await window.SL[action](m.id, amount);
+          await window.SL.appendHistory({
+            kind: action,
+            amount,
+            asset: m.label,
+            signature: sig,
+          });
 
-        // Record on-chain: bumps counters on the UserStats PDA.
-        if (window.SL && state.wallet) {
-          const kind = currentAction === "deposit" ? "supply" : "borrow";
-          const healthBps = 7500 + Math.floor(Math.random() * 2500);
-          try {
-            await window.SL.recordAction(kind, healthBps);
-            await window.SL.appendHistory({
-              kind,
-              amount,
-              asset: selectedMarket.id,
-            });
-            await refreshUserState();
-          } catch (e) {
-            // Recording is best-effort; the visual flow already completed.
-            console.warn("recordAction failed:", e);
+          // Mirror supply/borrow/repay onto the private UserStats counters
+          // that feed the proof-stream section. Best-effort.
+          if (action !== "withdraw") {
+            const mk = findMarket(m.id);
+            const healthBps =
+              mk.health != null
+                ? Math.min(65535, Math.round(mk.health * 10000))
+                : 0;
+            try {
+              await window.SL.recordAction(action, healthBps);
+            } catch (e) {
+              console.warn("recordAction failed:", e);
+            }
           }
+
+          const now = new Date();
+          const t = `${String(now.getMinutes()).padStart(2, "0")}:${String(
+            now.getSeconds()
+          ).padStart(2, "0")}`;
+          proofJobs.unshift([
+            "done",
+            `${action} proof`,
+            `${amount} ${m.label} · ${sig.slice(0, 6)}…`,
+            m.label,
+            t,
+          ]);
+          renderProofs();
+
+          document.getElementById("modalOverlay").classList.remove("open");
+          document.getElementById("amountInput").value = "";
+          showToast(
+            `${verb} confirmed`,
+            `${amount} ${m.label} · ${sig.slice(0, 8)}…`
+          );
+          await refreshUserState();
+        } catch (e) {
+          const msg = e?.message || String(e);
+          let body = msg;
+          if (/ExceedsLtv|exceed the market/i.test(msg)) {
+            body = `That borrow exceeds the ${m.ltvPct} max LTV on your supplied ${m.label}.`;
+          } else if (/WouldBeUnhealthy|undercollateralized/i.test(msg)) {
+            body =
+              "Withdrawing that much would leave your borrow undercollateralized.";
+          } else if (/InsufficientLiquidity/i.test(msg)) {
+            body = "The vault does not have enough liquidity for this borrow yet.";
+          } else if (/NothingToRepay/i.test(msg)) {
+            body = "You have no outstanding debt in this market.";
+          } else if (/InsufficientCollateral/i.test(msg)) {
+            body = `You have not supplied that much ${m.label}.`;
+          } else if (
+            /insufficient|not enough|debit an account|prior credit/i.test(msg)
+          ) {
+            body =
+              "Not enough balance. Check your wallet token balance, and that " +
+              "you have ~0.003 devnet SOL for fees.";
+          }
+          showToast(`${verb} failed`, body);
+        } finally {
+          btn.classList.remove("loading");
+          btnText.textContent = `${verb} ${m.label}`;
         }
       }
 
@@ -3278,7 +3332,7 @@
       // ── Boot ────────────────────────────────────────────
       renderMarkets();
       renderProofs();
-      selectMarket("SOL");
+      if (markets[0]) selectMarket(markets[0].id);
 
       document
         .querySelectorAll(".reveal")
@@ -3332,23 +3386,21 @@
         }
       });
 
-      // ── Initial faucet probe: tell the user if the program/faucet
-      //    isn't deployed yet, instead of silently rendering empty state.
-      async function probeFaucet() {
+      // ── Initial market load: pull on-chain totals into the cards, and
+      //    warn only if no markets are deployed on this cluster.
+      async function bootMarkets() {
         try {
-          const cfg = await window.SL.fetchFaucetConfig();
-          state.faucetReady = !!cfg;
-          if (!cfg) renderFaucetBanner();
+          await loadMarketData();
+          if (!state.ready) renderFaucetBanner();
         } catch {
-          state.faucetReady = false;
           renderFaucetBanner();
         }
       }
 
       if (window.SL) {
-        probeFaucet();
+        bootMarkets();
       } else {
-        window.addEventListener("sl-client-ready", probeFaucet, { once: true });
+        window.addEventListener("sl-client-ready", bootMarkets, { once: true });
       }
 
       function renderFaucetBanner() {
@@ -3360,10 +3412,9 @@
         banner.setAttribute("role", "status");
         banner.innerHTML = `
           <span class="d">●</span>
-          Faucet not yet initialized on
-          <strong>${window.SHADOW_LEND_CONFIG.cluster}</strong>. Connect
-          still works; claim and on-chain stats unlock once the program is
-          deployed.
+          No markets found on
+          <strong>${window.SHADOW_LEND_CONFIG.cluster}</strong>. The program
+          may be redeploying, try a hard reload in a moment.
         `;
         main.insertBefore(banner, main.firstChild);
       }

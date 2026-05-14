@@ -6,6 +6,6 @@ window.SHADOW_LEND_CONFIG = {
   rpcUrl: "https://api.devnet.solana.com",
   programId: "5jqXbgExBEnKPahsQineFmMJHNcEvwnniiYvDy81bZCF",
   // Populated by the deploy script after `initialize_faucet`.
-  faucetMint: null,
+  faucetMint: "9idwQArPtoDBMgEmcec72JeYHHNFfAUCsCiTBUzSwyP9",
   claimAmountUi: 10_000,
 };

@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Credit, hidden in plain sight</title>
-    <script src="./config.js?v=6"></script>
+    <script src="./config.js?v=7"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -966,17 +966,20 @@
 
       .market-actions {
         display: flex;
-        gap: 10px;
+        flex-wrap: wrap;
+        gap: 8px;
         margin-top: 26px;
       }
 
       .market-btn {
-        flex: 1;
-        padding: 13px;
+        flex: 1 1 90px;
+        min-width: 0;
+        white-space: nowrap;
+        padding: 11px 10px;
         font-family: var(--mono);
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
-        letter-spacing: 0.14em;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
         background: rgba(244, 234, 216, 0.06);
         color: var(--paper);
@@ -2148,7 +2151,7 @@
 
           <div class="demo-grid">
             <div class="demo-card paper reveal" data-stagger="1">
-              <div class="demo-label">Plaintext — local only</div>
+              <div class="demo-label">local only</div>
               <div class="demo-amount">
                 <span id="demoNum">2,400</span>
                 <span class="unit">USDC</span>
@@ -2406,24 +2409,24 @@
 
           <div class="stat-strip reveal" data-stagger="2">
             <div class="strip-stat">
-              <div class="k">Proofs settled</div>
-              <div class="v glow" data-countup="48211" data-int="1">0</div>
-              <div class="d">All-time, across SOL · USDC · WBTC markets.</div>
-            </div>
-            <div class="strip-stat">
-              <div class="k">Median proof time</div>
-              <div class="v" data-countup="1.42" data-suffix="s">0s</div>
-              <div class="d">Local encryption + MXE compute round-trip.</div>
+              <div class="k">Open positions</div>
+              <div class="v glow" id="actOpenPositions">—</div>
+              <div class="d">Unique (wallet, market) positions on-chain.</div>
             </div>
             <div class="strip-stat">
               <div class="k">Active markets</div>
-              <div class="v" data-countup="3" data-int="1">0</div>
-              <div class="d">More private rails coming this season.</div>
+              <div class="v" id="actMarkets">—</div>
+              <div class="d">SOL · USDC · BTC, all live on devnet.</div>
             </div>
             <div class="strip-stat">
-              <div class="k">Balance leaks</div>
-              <div class="v glow" data-countup="0" data-int="1">0</div>
-              <div class="d">Zero. That's the whole point.</div>
+              <div class="k">Total value locked</div>
+              <div class="v" id="actTvl">—</div>
+              <div class="d">Supplied collateral, USD via Pyth.</div>
+            </div>
+            <div class="strip-stat">
+              <div class="k">Total borrowed</div>
+              <div class="v glow" id="actBorrowed">—</div>
+              <div class="d">Outstanding debt across all markets.</div>
             </div>
           </div>
 
@@ -2552,7 +2555,7 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=6"></script>
+    <script type="module" src="./sl-client.js?v=7"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       // Display-only flavor, keyed by the market id in config.js. The real
@@ -2598,11 +2601,8 @@
         health: null,
       }));
 
-      const proofJobs = [
-        ["done", "LTV check", "SOL borrow · 0x8f3a…a4e2", "SOL", "00:02"],
-        ["live", "Health factor", "0x76c1…a4e2", "USDC", "00:08"],
-        ["waiting", "Interest accrual", "USDC reserve sweep", "USDC", "00:14"],
-      ];
+      // Filled by loadRecentProofs() from the chain's signature history.
+      const proofJobs = [];
 
       const state = {
         wallet: null,
@@ -3086,6 +3086,7 @@
           await refreshUserState();
           refreshHeroStats();
           refreshHeroSignature();
+          refreshActivityStats();
         } catch (e) {
           btn?.classList.remove("loading");
           if (btn) btn.textContent = `Claim ${fmt(m.claimUi, 0)} ${m.label}`;
@@ -3185,18 +3186,9 @@
             }
           }
 
-          const now = new Date();
-          const t = `${String(now.getMinutes()).padStart(2, "0")}:${String(
-            now.getSeconds()
-          ).padStart(2, "0")}`;
-          proofJobs.unshift([
-            "done",
-            `${action} proof`,
-            `${amount} ${m.label} · ${sig.slice(0, 6)}…`,
-            m.label,
-            t,
-          ]);
-          renderProofs();
+          // Re-pull the chain's signature history so the proof stream stays
+          // honest, no fabricated rows.
+          loadRecentProofs();
 
           document.getElementById("modalOverlay").classList.remove("open");
           document.getElementById("amountInput").value = "";
@@ -3207,6 +3199,7 @@
           await refreshUserState();
           refreshHeroStats();
           refreshHeroSignature();
+          refreshActivityStats();
         } catch (e) {
           const msg = e?.message || String(e);
           let body = msg;
@@ -3454,6 +3447,74 @@
         return "$0";
       }
 
+      async function refreshActivityStats() {
+        if (!window.SL) return;
+        try {
+          const [stats, positions] = await Promise.all([
+            window.SL.fetchHeroStats(),
+            window.SL.fetchOpenPositionsCount(),
+          ]);
+          document.getElementById("actOpenPositions").textContent =
+            positions == null ? "—" : Number(positions).toLocaleString();
+          document.getElementById("actMarkets").textContent = String(
+            (window.SL.getMarkets() || []).length
+          );
+          document.getElementById("actTvl").textContent = fmtUsd(
+            stats.totalSuppliedUsd
+          );
+          document.getElementById("actBorrowed").textContent = fmtUsd(
+            stats.totalBorrowedUsd
+          );
+        } catch (e) {
+          console.warn("refreshActivityStats:", e);
+        }
+      }
+
+      // Pulls the latest signatures that touched the program and turns them
+      // into the rows of the proof stream. No fake fillers.
+      async function loadRecentProofs(limit = 8) {
+        try {
+          const programId = window.SL?.PROGRAM_ID;
+          if (!programId) return;
+          const rpc = window.SHADOW_LEND_CONFIG.rpcUrl;
+          const res = await fetch(rpc, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "getSignaturesForAddress",
+              params: [programId.toString(), { limit }],
+            }),
+          });
+          const j = await res.json();
+          const sigs = j?.result || [];
+          proofJobs.length = 0;
+          const now = Math.floor(Date.now() / 1000);
+          for (const s of sigs) {
+            const age = s.blockTime ? now - s.blockTime : null;
+            const ageTxt =
+              age == null
+                ? "—"
+                : age < 60
+                  ? `${age}s ago`
+                  : age < 3600
+                    ? `${Math.floor(age / 60)}m ago`
+                    : `${Math.floor(age / 3600)}h ago`;
+            proofJobs.push([
+              s.err ? "failed" : "done",
+              "on-chain action",
+              `${s.signature.slice(0, 6)}…${s.signature.slice(-6)} · slot ${s.slot}`,
+              "—",
+              ageTxt,
+            ]);
+          }
+          renderProofs();
+        } catch (e) {
+          console.warn("loadRecentProofs:", e);
+        }
+      }
+
       async function refreshHeroStats() {
         if (!window.SL) return;
         try {
@@ -3492,6 +3553,8 @@
         }
         refreshHeroStats();
         refreshHeroSignature();
+        refreshActivityStats();
+        loadRecentProofs();
       }
 
       if (window.SL) {
@@ -3500,8 +3563,10 @@
         window.addEventListener("sl-client-ready", bootMarkets, { once: true });
       }
 
-      // Keep hero stats in sync with the chain without hammering the RPC.
+      // Keep hero + activity stats in sync with the chain without hammering RPC.
       setInterval(refreshHeroStats, 30_000);
+      setInterval(refreshActivityStats, 30_000);
+      setInterval(loadRecentProofs, 25_000);
 
       function renderFaucetBanner() {
         if (document.getElementById("deployBanner")) return;

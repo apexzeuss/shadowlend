@@ -323,6 +323,22 @@ export async function fetchHeroStats() {
   };
 }
 
+// Counts every Position PDA the program has ever opened. We use only the
+// dataSize filter (8 discriminator + 116 fields = 124 bytes) so a single RPC
+// call returns the lot.
+export async function fetchOpenPositionsCount() {
+  try {
+    const accts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [{ dataSize: 124 }],
+      dataSlice: { offset: 0, length: 0 },
+    });
+    return accts.length;
+  } catch (e) {
+    console.warn("fetchOpenPositionsCount failed:", e);
+    return null;
+  }
+}
+
 // True once at least one market exists on-chain.
 export async function isFaucetReady() {
   for (const m of MARKETS) {
@@ -722,6 +738,7 @@ window.SL = {
   fetchMarket,
   fetchAllMarkets,
   fetchHeroStats,
+  fetchOpenPositionsCount,
   isFaucetReady,
   fetchClaimReceipt,
   fetchPosition,

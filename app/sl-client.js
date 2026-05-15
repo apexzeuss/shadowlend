@@ -719,6 +719,67 @@ export const borrow = (marketId, uiAmount) =>
 export const repay = (marketId, uiAmount) =>
   modifyPosition("repay", marketId, uiAmount);
 
+// Liquidate an underwater borrower. The caller pays `uiRepayAmount` of the
+// debt market's token; the program transfers the equivalent value plus a 5%
+// bonus out of the borrower's collateral market into the caller's wallet.
+export async function liquidate({ borrower, debtMarketId, collateralMarketId, uiRepayAmount }) {
+  if (!program || !wallet) throw new Error("not connected");
+  const borrowerPk = new PublicKey(borrower);
+  const debt = marketPdas(debtMarketId, borrowerPk);
+  const collat = marketPdas(collateralMarketId, borrowerPk);
+  const debtFeed = await resolvePriceUpdate(debt.cfg.feedHex);
+  const collatFeed = await resolvePriceUpdate(collat.cfg.feedHex);
+  const liquidatorDebtAta = getAssociatedTokenAddressSync(
+    debt.mint,
+    wallet.publicKey
+  );
+  const liquidatorCollatAta = getAssociatedTokenAddressSync(
+    collat.mint,
+    wallet.publicKey
+  );
+
+  // Other markets the borrower has activity in feed into remaining_accounts
+  // for the global health check.
+  const remaining = [];
+  for (const m of MARKETS) {
+    if (m.id === debtMarketId || m.id === collateralMarketId) continue;
+    const pdas = marketPdas(m.id, borrowerPk);
+    const p = await ensureReadProgram();
+    let pos = null;
+    try {
+      pos = await p.account.position.fetch(pdas.position);
+    } catch {
+      continue;
+    }
+    if (!pos || (pos.supplied.eqn(0) && pos.borrowed.eqn(0))) continue;
+    const pu = await resolvePriceUpdate(m.feedHex);
+    remaining.push({ pubkey: pdas.position, isWritable: false, isSigner: false });
+    remaining.push({ pubkey: pu, isWritable: false, isSigner: false });
+  }
+
+  const amount = toBase(uiRepayAmount, debt.cfg.decimals);
+  return await program.methods
+    .liquidate(amount)
+    .accounts({
+      liquidator: wallet.publicKey,
+      borrower: borrowerPk,
+      debtMarket: debt.market,
+      debtPosition: debt.position,
+      debtVault: debt.vault,
+      debtPriceUpdate: debtFeed,
+      liquidatorDebtAta,
+      collateralMarket: collat.market,
+      collateralPosition: collat.position,
+      collateralVault: collat.vault,
+      collateralAuthority: collat.authority,
+      collateralPriceUpdate: collatFeed,
+      liquidatorCollateralAta: liquidatorCollatAta,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .remainingAccounts(remaining)
+    .rpc();
+}
+
 // ── Local history (IndexedDB) ──────────────────────────────
 const DB_NAME = "shadowlend";
 const STORE = "history";
@@ -799,6 +860,7 @@ window.SL = {
   withdraw,
   borrow,
   repay,
+  liquidate,
   loadHistory,
   appendHistory,
   PROGRAM_ID,

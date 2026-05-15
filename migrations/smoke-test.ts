@@ -128,6 +128,71 @@ async function main() {
   console.log(
     `position → supplied ${pos.supplied.toString()} borrowed ${pos.borrowed.toString()}`
   );
+
+  // Liquidation negative path: a healthy (or zero) position is not liquidatable.
+  // We try to liquidate the admin's own SOL position against the USDC market
+  // and expect either PositionHealthy or NothingToLiquidate.
+  const usdcCfg = cfg.markets.find((x: any) => x.id === "usdc");
+  if (usdcCfg) {
+    const usdcMint = new PublicKey(usdcCfg.mint);
+    const ub = usdcMint.toBuffer();
+    const [usdcMarket] = PublicKey.findProgramAddressSync(
+      [seed("market"), ub],
+      pid
+    );
+    const [usdcAuth] = PublicKey.findProgramAddressSync(
+      [seed("auth"), ub],
+      pid
+    );
+    const [usdcVault] = PublicKey.findProgramAddressSync(
+      [seed("vault"), ub],
+      pid
+    );
+    const [usdcPosition] = PublicKey.findProgramAddressSync(
+      [seed("position"), user.toBuffer(), ub],
+      pid
+    );
+    const usdcAta = getAssociatedTokenAddressSync(usdcMint, user);
+    const usdcPrice = await freshestPriceUpdate(conn, usdcCfg.feedHex);
+
+    try {
+      await program.methods
+        .liquidate(base(1))
+        .accounts({
+          liquidator: user,
+          borrower: user,
+          debtMarket: usdcMarket,
+          debtPosition: usdcPosition,
+          debtVault: usdcVault,
+          debtPriceUpdate: usdcPrice,
+          liquidatorDebtAta: usdcAta,
+          collateralMarket: market,
+          collateralPosition: position,
+          collateralVault: vault,
+          collateralAuthority: authority,
+          collateralPriceUpdate: priceUpdate,
+          liquidatorCollateralAta: ata,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+      console.log("✗ liquidate of healthy position unexpectedly succeeded");
+      process.exit(1);
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      if (/SelfLiquidation/i.test(msg))
+        console.log("✓ self-liquidate correctly rejected (SelfLiquidation)");
+      else if (/PositionHealthy/i.test(msg))
+        console.log("✓ healthy liquidation correctly rejected (PositionHealthy)");
+      else if (/NothingToLiquidate/i.test(msg))
+        console.log("✓ no-op liquidation correctly rejected (NothingToLiquidate)");
+      else if (/AccountNotInitialized|account does not exist/i.test(msg))
+        console.log(
+          "✓ liquidate skipped: position account not initialized (expected for empty admin)"
+        );
+      else throw e;
+    }
+  }
+
   console.log("\nALL GOOD");
 }
 

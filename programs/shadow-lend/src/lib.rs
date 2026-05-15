@@ -16,6 +16,9 @@ pub const BPS_DENOMINATOR: u128 = 10_000;
 /// Max age of a Pyth price update we will accept, in seconds. Devnet feeds are
 /// updated less aggressively than mainnet, so we are generous here.
 pub const MAX_PRICE_AGE_SEC: u64 = 300;
+/// Liquidator bonus when seizing collateral from an underwater position.
+/// 500 bps = 5%.
+pub const LIQUIDATION_BONUS_BPS: u128 = 500;
 
 #[program]
 pub mod shadow_lend {
@@ -364,6 +367,181 @@ pub mod shadow_lend {
         Ok(())
     }
 
+    /// Liquidates an undercollateralised borrower. The liquidator repays some
+    /// of the borrower's debt in `debt_mint` and seizes a USD-equivalent
+    /// amount of `collateral_mint` plus a 5% bonus, drawn from the borrower's
+    /// supplied collateral position. `remaining_accounts`: pairs of
+    /// (other_position, other_price_update) for *every other* market the
+    /// borrower has activity in, so the program can verify global health < 1.
+    pub fn liquidate(ctx: Context<Liquidate>, repay_amount: u64) -> Result<()> {
+        require!(repay_amount > 0, MarketError::ZeroAmount);
+        let clock = Clock::get()?;
+        let borrower = ctx.accounts.borrower.key();
+        let liquidator_key = ctx.accounts.liquidator.key();
+
+        require!(
+            liquidator_key != borrower,
+            MarketError::SelfLiquidation
+        );
+
+        require_keys_eq!(
+            ctx.accounts.debt_position.user,
+            borrower,
+            MarketError::BadPositionAccount
+        );
+        require_keys_eq!(
+            ctx.accounts.collateral_position.user,
+            borrower,
+            MarketError::BadPositionAccount
+        );
+        require!(
+            ctx.accounts.debt_position.borrowed > 0,
+            MarketError::NothingToLiquidate
+        );
+        require!(
+            ctx.accounts.collateral_position.supplied > 0,
+            MarketError::NothingToLiquidate
+        );
+
+        let debt_price = ctx
+            .accounts
+            .debt_price_update
+            .get_price_no_older_than(&clock, MAX_PRICE_AGE_SEC, &ctx.accounts.debt_market.feed_id)
+            .map_err(|_| error!(MarketError::StalePrice))?;
+        let collat_price = ctx
+            .accounts
+            .collateral_price_update
+            .get_price_no_older_than(
+                &clock,
+                MAX_PRICE_AGE_SEC,
+                &ctx.accounts.collateral_market.feed_id,
+            )
+            .map_err(|_| error!(MarketError::StalePrice))?;
+
+        // Compute borrower's global health. Include both main positions plus
+        // any others passed in remaining_accounts.
+        let mut total_collat_at_ltv: u128 = 0;
+        let mut total_debt: u128 = 0;
+        accumulate_position(
+            ctx.accounts.debt_position.supplied,
+            ctx.accounts.debt_position.borrowed,
+            &debt_price,
+            ctx.accounts.debt_position.decimals,
+            ctx.accounts.debt_position.max_ltv_bps,
+            &mut total_collat_at_ltv,
+            &mut total_debt,
+        );
+        accumulate_position(
+            ctx.accounts.collateral_position.supplied,
+            ctx.accounts.collateral_position.borrowed,
+            &collat_price,
+            ctx.accounts.collateral_position.decimals,
+            ctx.accounts.collateral_position.max_ltv_bps,
+            &mut total_collat_at_ltv,
+            &mut total_debt,
+        );
+        let skip_keys = [
+            ctx.accounts.debt_position.key(),
+            ctx.accounts.collateral_position.key(),
+        ];
+        accumulate_remaining_skip(
+            ctx.remaining_accounts,
+            &borrower,
+            &skip_keys,
+            &clock,
+            &mut total_collat_at_ltv,
+            &mut total_debt,
+        )?;
+        require!(
+            total_debt > total_collat_at_ltv,
+            MarketError::PositionHealthy
+        );
+
+        // Floor the actual repay to what the borrower actually owes.
+        let actual_repay = repay_amount.min(ctx.accounts.debt_position.borrowed);
+
+        // Compute how much collateral the liquidator gets to seize.
+        let repay_value_usd = token_usd_8dp(
+            actual_repay,
+            &debt_price,
+            ctx.accounts.debt_position.decimals,
+        );
+        let seize_value_usd = repay_value_usd
+            .saturating_mul(BPS_DENOMINATOR + LIQUIDATION_BONUS_BPS)
+            / BPS_DENOMINATOR;
+        let mut seize_amount = usd_8dp_to_token(
+            seize_value_usd,
+            &collat_price,
+            ctx.accounts.collateral_position.decimals,
+        );
+        // Cap to the borrower's actual supplied collateral.
+        if seize_amount > ctx.accounts.collateral_position.supplied {
+            seize_amount = ctx.accounts.collateral_position.supplied;
+        }
+        require!(seize_amount > 0, MarketError::NothingToLiquidate);
+        require!(
+            ctx.accounts.collateral_vault.amount >= seize_amount,
+            MarketError::InsufficientLiquidity
+        );
+
+        // 1. Liquidator pays debt token into the debt vault.
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.liquidator_debt_ata.to_account_info(),
+                    to: ctx.accounts.debt_vault.to_account_info(),
+                    authority: ctx.accounts.liquidator.to_account_info(),
+                },
+            ),
+            actual_repay,
+        )?;
+
+        // 2. Collateral vault releases seized tokens to liquidator.
+        let collat_mint = ctx.accounts.collateral_market.mint;
+        let collat_auth_bump = ctx.accounts.collateral_market.authority_bump;
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            AUTH_SEED,
+            collat_mint.as_ref(),
+            &[collat_auth_bump],
+        ]];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.collateral_vault.to_account_info(),
+                    to: ctx.accounts.liquidator_collateral_ata.to_account_info(),
+                    authority: ctx.accounts.collateral_authority.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            seize_amount,
+        )?;
+
+        // 3. Update borrower's positions and market totals.
+        let debt_position = &mut ctx.accounts.debt_position;
+        debt_position.borrowed = debt_position.borrowed.saturating_sub(actual_repay);
+        let collateral_position = &mut ctx.accounts.collateral_position;
+        collateral_position.supplied =
+            collateral_position.supplied.saturating_sub(seize_amount);
+
+        let debt_market = &mut ctx.accounts.debt_market;
+        debt_market.total_borrowed = debt_market.total_borrowed.saturating_sub(actual_repay);
+        let collateral_market = &mut ctx.accounts.collateral_market;
+        collateral_market.total_supplied =
+            collateral_market.total_supplied.saturating_sub(seize_amount);
+
+        emit!(Liquidation {
+            liquidator: liquidator_key,
+            borrower,
+            debt_mint: debt_market.mint,
+            collateral_mint: collateral_market.mint,
+            repaid: actual_repay,
+            seized: seize_amount,
+        });
+        Ok(())
+    }
+
     pub fn init_user_stats(ctx: Context<InitUserStats>) -> Result<()> {
         let stats = &mut ctx.accounts.stats;
         let clock = Clock::get()?;
@@ -444,6 +622,22 @@ fn token_usd_8dp(amount: u64, price: &Price, decimals: u8) -> u128 {
     }
 }
 
+/// Inverse of `token_usd_8dp`: how many base units of a token (`decimals`
+/// precision, priced at `price`) does `value_usd_8dp` correspond to.
+fn usd_8dp_to_token(value_usd_8dp: u128, price: &Price, decimals: u8) -> u64 {
+    let p = (price.price.max(1)) as u128;
+    let shift = 8i32 + price.exponent - decimals as i32;
+    let result = if shift >= 0 {
+        let pow = 10u128.checked_pow(shift as u32).unwrap_or(u128::MAX);
+        let denom = p.saturating_mul(pow);
+        if denom == 0 { 0 } else { value_usd_8dp / denom }
+    } else {
+        let mul = 10u128.checked_pow((-shift) as u32).unwrap_or(1);
+        value_usd_8dp.saturating_mul(mul) / p
+    };
+    result.try_into().unwrap_or(u64::MAX)
+}
+
 fn accumulate_position(
     supplied: u64,
     borrowed: u64,
@@ -462,6 +656,57 @@ fn accumulate_position(
 /// Walks `remaining_accounts` as (Position, PriceUpdateV2) pairs, summing
 /// each into the running collateral and debt totals. Skips the position whose
 /// pubkey matches `skip` — that one is already counted from the main accounts.
+/// Like `accumulate_remaining` but skips any positions whose key appears in
+/// `skip_keys`. Used by `liquidate`, which has two main positions in scope.
+fn accumulate_remaining_skip<'info>(
+    ras: &[AccountInfo<'info>],
+    user: &Pubkey,
+    skip_keys: &[Pubkey],
+    clock: &Clock,
+    total_collat_at_ltv: &mut u128,
+    total_debt: &mut u128,
+) -> Result<()> {
+    require!(
+        ras.len() % 2 == 0,
+        MarketError::BadRemainingAccounts
+    );
+    let mut i = 0;
+    while i < ras.len() {
+        let pos_ai = &ras[i];
+        let pu_ai = &ras[i + 1];
+        i += 2;
+        if skip_keys.iter().any(|k| k == pos_ai.key) {
+            continue;
+        }
+        require!(pos_ai.owner == &crate::ID, MarketError::BadPositionAccount);
+        let pos = Position::try_deserialize(&mut &pos_ai.data.borrow()[..])
+            .map_err(|_| error!(MarketError::BadPositionAccount))?;
+        require_keys_eq!(pos.user, *user, MarketError::BadPositionAccount);
+        if pos.supplied == 0 && pos.borrowed == 0 {
+            continue;
+        }
+        require!(
+            pu_ai.owner == &pyth_solana_receiver_sdk::ID,
+            MarketError::BadPriceFeed
+        );
+        let pu = PriceUpdateV2::try_deserialize(&mut &pu_ai.data.borrow()[..])
+            .map_err(|_| error!(MarketError::BadPriceFeed))?;
+        let price = pu
+            .get_price_no_older_than(clock, MAX_PRICE_AGE_SEC, &pos.feed_id)
+            .map_err(|_| error!(MarketError::StalePrice))?;
+        accumulate_position(
+            pos.supplied,
+            pos.borrowed,
+            &price,
+            pos.decimals,
+            pos.max_ltv_bps,
+            total_collat_at_ltv,
+            total_debt,
+        );
+    }
+    Ok(())
+}
+
 fn accumulate_remaining<'info>(
     ras: &[AccountInfo<'info>],
     user: &Pubkey,
@@ -741,6 +986,88 @@ pub struct RecordAction<'info> {
     pub stats: Box<Account<'info, UserStats>>,
 }
 
+/// Liquidation context. The liquidator and borrower are different wallets; the
+/// program pulls the borrower's debt and collateral positions by PDA from the
+/// supplied borrower pubkey.
+#[derive(Accounts)]
+pub struct Liquidate<'info> {
+    #[account(mut)]
+    pub liquidator: Signer<'info>,
+
+    /// CHECK: only used to derive the borrower's PDA addresses.
+    pub borrower: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        seeds = [MARKET_SEED, debt_market.mint.as_ref()],
+        bump = debt_market.bump
+    )]
+    pub debt_market: Box<Account<'info, Market>>,
+
+    #[account(
+        mut,
+        seeds = [POSITION_SEED, borrower.key().as_ref(), debt_market.mint.as_ref()],
+        bump = debt_position.bump
+    )]
+    pub debt_position: Box<Account<'info, Position>>,
+
+    #[account(
+        mut,
+        seeds = [VAULT_SEED, debt_market.mint.as_ref()],
+        bump
+    )]
+    pub debt_vault: Box<Account<'info, TokenAccount>>,
+
+    pub debt_price_update: Box<Account<'info, PriceUpdateV2>>,
+
+    #[account(
+        mut,
+        constraint = liquidator_debt_ata.mint == debt_market.mint @ MarketError::MintMismatch,
+        constraint = liquidator_debt_ata.owner == liquidator.key() @ MarketError::Unauthorized,
+    )]
+    pub liquidator_debt_ata: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        seeds = [MARKET_SEED, collateral_market.mint.as_ref()],
+        bump = collateral_market.bump
+    )]
+    pub collateral_market: Box<Account<'info, Market>>,
+
+    #[account(
+        mut,
+        seeds = [POSITION_SEED, borrower.key().as_ref(), collateral_market.mint.as_ref()],
+        bump = collateral_position.bump
+    )]
+    pub collateral_position: Box<Account<'info, Position>>,
+
+    #[account(
+        mut,
+        seeds = [VAULT_SEED, collateral_market.mint.as_ref()],
+        bump
+    )]
+    pub collateral_vault: Box<Account<'info, TokenAccount>>,
+
+    /// CHECK: PDA mint+vault authority for the collateral market, signs the
+    /// vault → liquidator transfer.
+    #[account(
+        seeds = [AUTH_SEED, collateral_market.mint.as_ref()],
+        bump = collateral_market.authority_bump
+    )]
+    pub collateral_authority: UncheckedAccount<'info>,
+
+    pub collateral_price_update: Box<Account<'info, PriceUpdateV2>>,
+
+    #[account(
+        mut,
+        constraint = liquidator_collateral_ata.mint == collateral_market.mint @ MarketError::MintMismatch,
+        constraint = liquidator_collateral_ata.owner == liquidator.key() @ MarketError::Unauthorized,
+    )]
+    pub liquidator_collateral_ata: Box<Account<'info, TokenAccount>>,
+
+    pub token_program: Program<'info, Token>,
+}
+
 #[account]
 pub struct Market {
     pub admin: Pubkey,
@@ -848,6 +1175,16 @@ pub struct ActionRecorded {
     pub at: i64,
 }
 
+#[event]
+pub struct Liquidation {
+    pub liquidator: Pubkey,
+    pub borrower: Pubkey,
+    pub debt_mint: Pubkey,
+    pub collateral_mint: Pubkey,
+    pub repaid: u64,
+    pub seized: u64,
+}
+
 #[error_code]
 pub enum MarketError {
     #[msg("Caller is not the market admin.")]
@@ -880,6 +1217,14 @@ pub enum MarketError {
     StalePrice,
     #[msg("Cannot borrow from a market you've supplied to. Use cross-asset collateral.")]
     SameMintBorrow,
+    #[msg("Position is healthy (debt within LTV); not eligible for liquidation.")]
+    PositionHealthy,
+    #[msg("Position has nothing of the relevant kind to liquidate.")]
+    NothingToLiquidate,
+    #[msg("Liquidators cannot liquidate themselves.")]
+    SelfLiquidation,
+    #[msg("Account owner check failed.")]
+    Unauthorized,
 }
 
 #[error_code]

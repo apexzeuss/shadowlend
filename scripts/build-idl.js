@@ -144,6 +144,27 @@ const idl = {
     borrowOrWithdrawIx("borrow"),
     supplyOrRepayIx("repay"),
     {
+      name: "liquidate",
+      discriminator: ixDisc("liquidate"),
+      accounts: [
+        { name: "liquidator", writable: true, signer: true },
+        { name: "borrower" },
+        { name: "debt_market", writable: true },
+        { name: "debt_position", writable: true },
+        { name: "debt_vault", writable: true },
+        { name: "debt_price_update" },
+        { name: "liquidator_debt_ata", writable: true },
+        { name: "collateral_market", writable: true },
+        { name: "collateral_position", writable: true },
+        { name: "collateral_vault", writable: true },
+        { name: "collateral_authority" },
+        { name: "collateral_price_update" },
+        { name: "liquidator_collateral_ata", writable: true },
+        { name: "token_program", address: TokenProgram },
+      ],
+      args: [{ name: "repay_amount", type: "u64" }],
+    },
+    {
       name: "init_user_stats",
       discriminator: ixDisc("init_user_stats"),
       accounts: [
@@ -176,6 +197,7 @@ const idl = {
     { name: "FaucetClaimed", discriminator: eventDisc("FaucetClaimed") },
     { name: "MarketAction", discriminator: eventDisc("MarketAction") },
     { name: "ActionRecorded", discriminator: eventDisc("ActionRecorded") },
+    { name: "Liquidation", discriminator: eventDisc("Liquidation") },
   ],
   errors: [
     { code: 6000, name: "NotAdmin", msg: "Caller is not the market admin." },
@@ -201,8 +223,12 @@ const idl = {
     { code: 6012, name: "BadPriceFeed", msg: "Price feed account is invalid or the feed id does not match." },
     { code: 6013, name: "StalePrice", msg: "Price update is older than the maximum accepted age." },
     { code: 6014, name: "SameMintBorrow", msg: "Cannot borrow from a market you've supplied to. Use cross-asset collateral." },
-    { code: 6015, name: "Unauthorized", msg: "Stats account does not belong to this signer." },
-    { code: 6016, name: "Overflow", msg: "Arithmetic overflow." },
+    { code: 6015, name: "PositionHealthy", msg: "Position is healthy (debt within LTV); not eligible for liquidation." },
+    { code: 6016, name: "NothingToLiquidate", msg: "Position has nothing of the relevant kind to liquidate." },
+    { code: 6017, name: "SelfLiquidation", msg: "Liquidators cannot liquidate themselves." },
+    { code: 6018, name: "Unauthorized", msg: "Account owner check failed." },
+    { code: 6019, name: "Unauthorized", msg: "Stats account does not belong to this signer." },
+    { code: 6020, name: "Overflow", msg: "Arithmetic overflow." },
   ],
   types: [
     {
@@ -329,6 +355,20 @@ const idl = {
           { name: "kind", type: { defined: { name: "ActionKind" } } },
           { name: "health_bps", type: "u16" },
           { name: "at", type: "i64" },
+        ],
+      },
+    },
+    {
+      name: "Liquidation",
+      type: {
+        kind: "struct",
+        fields: [
+          { name: "liquidator", type: "pubkey" },
+          { name: "borrower", type: "pubkey" },
+          { name: "debt_mint", type: "pubkey" },
+          { name: "collateral_mint", type: "pubkey" },
+          { name: "repaid", type: "u64" },
+          { name: "seized", type: "u64" },
         ],
       },
     },

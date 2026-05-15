@@ -845,6 +845,80 @@
       ]
     },
     {
+      "name": "liquidate",
+      "discriminator": [
+        223,
+        179,
+        226,
+        125,
+        48,
+        46,
+        39,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "liquidator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "borrower"
+        },
+        {
+          "name": "debt_market",
+          "writable": true
+        },
+        {
+          "name": "debt_position",
+          "writable": true
+        },
+        {
+          "name": "debt_vault",
+          "writable": true
+        },
+        {
+          "name": "debt_price_update"
+        },
+        {
+          "name": "liquidator_debt_ata",
+          "writable": true
+        },
+        {
+          "name": "collateral_market",
+          "writable": true
+        },
+        {
+          "name": "collateral_position",
+          "writable": true
+        },
+        {
+          "name": "collateral_vault",
+          "writable": true
+        },
+        {
+          "name": "collateral_authority"
+        },
+        {
+          "name": "collateral_price_update"
+        },
+        {
+          "name": "liquidator_collateral_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "repay_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "init_user_stats",
       "discriminator": [
         177,
@@ -1040,6 +1114,19 @@
         247,
         96
       ]
+    },
+    {
+      "name": "Liquidation",
+      "discriminator": [
+        253,
+        18,
+        85,
+        107,
+        192,
+        175,
+        171,
+        172
+      ]
     }
   ],
   "errors": [
@@ -1120,11 +1207,31 @@
     },
     {
       "code": 6015,
+      "name": "PositionHealthy",
+      "msg": "Position is healthy (debt within LTV); not eligible for liquidation."
+    },
+    {
+      "code": 6016,
+      "name": "NothingToLiquidate",
+      "msg": "Position has nothing of the relevant kind to liquidate."
+    },
+    {
+      "code": 6017,
+      "name": "SelfLiquidation",
+      "msg": "Liquidators cannot liquidate themselves."
+    },
+    {
+      "code": 6018,
+      "name": "Unauthorized",
+      "msg": "Account owner check failed."
+    },
+    {
+      "code": 6019,
       "name": "Unauthorized",
       "msg": "Stats account does not belong to this signer."
     },
     {
-      "code": 6016,
+      "code": 6020,
       "name": "Overflow",
       "msg": "Arithmetic overflow."
     }
@@ -1428,6 +1535,38 @@
           {
             "name": "at",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Liquidation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "liquidator",
+            "type": "pubkey"
+          },
+          {
+            "name": "borrower",
+            "type": "pubkey"
+          },
+          {
+            "name": "debt_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "collateral_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "repaid",
+            "type": "u64"
+          },
+          {
+            "name": "seized",
+            "type": "u64"
           }
         ]
       }

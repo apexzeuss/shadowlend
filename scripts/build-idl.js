@@ -200,8 +200,9 @@ const idl = {
     { code: 6011, name: "BadPositionAccount", msg: "Position account is not owned by this program or not this user's." },
     { code: 6012, name: "BadPriceFeed", msg: "Price feed account is invalid or the feed id does not match." },
     { code: 6013, name: "StalePrice", msg: "Price update is older than the maximum accepted age." },
-    { code: 6014, name: "Unauthorized", msg: "Stats account does not belong to this signer." },
-    { code: 6015, name: "Overflow", msg: "Arithmetic overflow." },
+    { code: 6014, name: "SameMintBorrow", msg: "Cannot borrow from a market you've supplied to. Use cross-asset collateral." },
+    { code: 6015, name: "Unauthorized", msg: "Stats account does not belong to this signer." },
+    { code: 6016, name: "Overflow", msg: "Arithmetic overflow." },
   ],
   types: [
     {

@@ -250,6 +250,14 @@ pub mod shadow_lend {
         let market_ref = &ctx.accounts.market;
         let clock = Clock::get()?;
 
+        // Borrowing from a market you're already supplying to is flash-loan
+        // shaped: the user's own collateral is the source of their debt. Force
+        // cross-asset collateralisation.
+        require!(
+            position.supplied == 0,
+            MarketError::SameMintBorrow
+        );
+
         let new_borrowed = position
             .borrowed
             .checked_add(amount)
@@ -870,6 +878,8 @@ pub enum MarketError {
     BadPriceFeed,
     #[msg("Price update is older than the maximum accepted age.")]
     StalePrice,
+    #[msg("Cannot borrow from a market you've supplied to. Use cross-asset collateral.")]
+    SameMintBorrow,
 }
 
 #[error_code]

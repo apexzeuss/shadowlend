@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Cross-asset lending on Solana</title>
-    <script src="./config.js?v=11"></script>
+    <script src="./config.js?v=12"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -2575,7 +2575,7 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=11"></script>
+    <script type="module" src="./sl-client.js?v=12"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       // Display-only flavor, keyed by the market id in config.js. The real
@@ -3152,7 +3152,7 @@
           supply: `Deposits ${m.label} into the vault. Counts toward your cross-asset borrow limit.`,
           borrow: `Cross-asset borrowable now: ${fmt(
             m.borrowable || 0
-          )} ${m.label}. Backed by your total collateral × each market's LTV.`,
+          )} ${m.label}. Your collateral in *other* markets backs this — same-mint borrow is disabled.`,
           withdraw: `You have ${fmt(m.supplied)} ${m.label} supplied. Health check runs across all your positions.`,
           repay: `Outstanding debt: ${fmt(m.borrowed)} ${m.label}.`,
         };
@@ -3223,7 +3223,9 @@
         } catch (e) {
           const msg = e?.message || String(e);
           let body = msg;
-          if (/ExceedsLtv|exceed/i.test(msg)) {
+          if (/SameMintBorrow|already supplying/i.test(msg)) {
+            body = `You're already supplying ${m.label}. Borrow a different asset, or withdraw your ${m.label} first.`;
+          } else if (/ExceedsLtv|exceed/i.test(msg)) {
             body = `That borrow exceeds your total collateral × LTV across markets. Supply more first, or borrow less.`;
           } else if (/WouldBeUnhealthy|undercollateralized/i.test(msg)) {
             body =

@@ -1115,11 +1115,16 @@
     },
     {
       "code": 6014,
+      "name": "SameMintBorrow",
+      "msg": "Cannot borrow from a market you've supplied to. Use cross-asset collateral."
+    },
+    {
+      "code": 6015,
       "name": "Unauthorized",
       "msg": "Stats account does not belong to this signer."
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "Overflow",
       "msg": "Arithmetic overflow."
     }

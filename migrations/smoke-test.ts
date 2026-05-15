@@ -108,23 +108,18 @@ async function main() {
   await program.methods.supply(base(500)).accounts(supplyAccounts).rpc();
   console.log("✓ supply 500");
 
-  await program.methods.borrow(base(100)).accounts(priceAccounts).rpc();
-  console.log("✓ borrow 100 (under LTV)");
-
-  // Attempt to over-borrow: 500 * 80% = 400 max. We have 100 borrowed, so the
-  // next 350 should bust the LTV (100+350 = 450 > 400).
+  // Same-mint borrow must now be rejected: the user has supplied SOL into the
+  // SOL market, so borrowing SOL against their own supply is not allowed.
   try {
-    await program.methods.borrow(base(350)).accounts(priceAccounts).rpc();
-    console.log("✗ over-borrow unexpectedly succeeded");
+    await program.methods.borrow(base(100)).accounts(priceAccounts).rpc();
+    console.log("✗ same-mint borrow unexpectedly succeeded");
     process.exit(1);
   } catch (e: any) {
     const msg = e?.message || String(e);
-    if (/ExceedsLtv|exceed/i.test(msg)) console.log("✓ over-borrow correctly rejected");
+    if (/SameMintBorrow/i.test(msg))
+      console.log("✓ same-mint borrow correctly rejected (SameMintBorrow)");
     else throw e;
   }
-
-  await program.methods.repay(base(100)).accounts(supplyAccounts).rpc();
-  console.log("✓ repay 100");
 
   await program.methods.withdraw(base(500)).accounts(priceAccounts).rpc();
   console.log("✓ withdraw 500");

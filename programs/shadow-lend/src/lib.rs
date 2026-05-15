@@ -649,7 +649,10 @@ fn token_usd_8dp(amount: u64, price: &Price, decimals: u8) -> u128 {
 /// Inverse of `token_usd_8dp`: how many base units of a token (`decimals`
 /// precision, priced at `price`) does `value_usd_8dp` correspond to.
 fn usd_8dp_to_token(value_usd_8dp: u128, price: &Price, decimals: u8) -> u64 {
-    let p = (price.price.max(1)) as u128;
+    if price.price <= 0 {
+        return 0;
+    }
+    let p = price.price as u128;
     let shift = 8i32 + price.exponent - decimals as i32;
     let result = if shift >= 0 {
         let pow = 10u128.checked_pow(shift as u32).unwrap_or(u128::MAX);
@@ -1298,4 +1301,192 @@ pub enum StatsError {
     Unauthorized,
     #[msg("Arithmetic overflow.")]
     Overflow,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn price(p: i64, exponent: i32) -> Price {
+        Price {
+            price: p,
+            conf: 0,
+            exponent,
+            publish_time: 0,
+        }
+    }
+
+    // ── token_usd_8dp ────────────────────────────────────────
+
+    #[test]
+    fn token_usd_basic_round_dollar() {
+        // 1 SOL (1e9 atoms, 9 decimals) at $100 (price = 1e10, expo = -8).
+        // Expected USD * 1e8 = $100 * 1e8 = 1e10.
+        let v = token_usd_8dp(1_000_000_000, &price(10_000_000_000, -8), 9);
+        assert_eq!(v, 10_000_000_000);
+    }
+
+    #[test]
+    fn token_usd_fractional_token() {
+        // 0.5 SOL at $100 → $50 → 5e9 in 8dp.
+        let v = token_usd_8dp(500_000_000, &price(10_000_000_000, -8), 9);
+        assert_eq!(v, 5_000_000_000);
+    }
+
+    #[test]
+    fn token_usd_btc_high_price() {
+        // 0.001 BTC at $80,000 = $80 = 8e9 in 8dp.
+        // BTC 9 decimals: 0.001 BTC = 1e6 atoms.
+        // price = 80_000 * 1e8 = 8e12 at expo = -8.
+        let v = token_usd_8dp(1_000_000, &price(8_000_000_000_000, -8), 9);
+        assert_eq!(v, 8_000_000_000);
+    }
+
+    #[test]
+    fn token_usd_zero_amount() {
+        assert_eq!(token_usd_8dp(0, &price(10_000_000_000, -8), 9), 0);
+    }
+
+    #[test]
+    fn token_usd_negative_price_clamps_to_zero() {
+        let v = token_usd_8dp(1_000_000_000, &price(-100, -8), 9);
+        assert_eq!(v, 0);
+    }
+
+    // ── usd_8dp_to_token (inverse) ───────────────────────────
+
+    #[test]
+    fn round_trip_sol_at_100_dollars() {
+        let p = price(10_000_000_000, -8);
+        let atoms = 1_234_567_890_000u64; // ~1234.56 SOL
+        let usd = token_usd_8dp(atoms, &p, 9);
+        let back = usd_8dp_to_token(usd, &p, 9);
+        // Allow 1-atom round-trip error from the int division.
+        assert!((atoms as i128 - back as i128).abs() <= 1, "{} vs {}", atoms, back);
+    }
+
+    #[test]
+    fn usd_to_token_zero_price_returns_zero() {
+        // A zero or negative price must not let a liquidator seize collateral
+        // for free. usd_8dp_to_token returns 0 so the liquidate path will hit
+        // the NothingToLiquidate guard.
+        assert_eq!(usd_8dp_to_token(1_000_000_000, &price(0, -8), 9), 0);
+        assert_eq!(usd_8dp_to_token(1_000_000_000, &price(-42, -8), 9), 0);
+    }
+
+    // ── accrue_market ────────────────────────────────────────
+
+    fn test_market(borrow_rate_per_slot_e18: u64, last_slot: u64) -> Market {
+        Market {
+            admin: Pubkey::default(),
+            mint: Pubkey::default(),
+            amount_per_claim: 0,
+            max_ltv_bps: 8000,
+            feed_id: [0u8; 32],
+            borrow_rate_per_slot_e18,
+            borrow_index_e18: RATE_SCALE_E18,
+            last_update_slot: last_slot,
+            total_supplied: 0,
+            total_borrowed: 0,
+            claim_count: 0,
+            bump: 0,
+            authority_bump: 0,
+        }
+    }
+
+    fn clock_at(slot: u64) -> Clock {
+        Clock {
+            slot,
+            epoch_start_timestamp: 0,
+            epoch: 0,
+            leader_schedule_epoch: 0,
+            unix_timestamp: 0,
+        }
+    }
+
+    #[test]
+    fn accrue_zero_slots_is_no_op() {
+        let mut m = test_market(1_000_000, 42);
+        accrue_market(&mut m, &clock_at(42));
+        assert_eq!(m.borrow_index_e18, RATE_SCALE_E18);
+        assert_eq!(m.last_update_slot, 42);
+    }
+
+    #[test]
+    fn accrue_grows_index_linearly() {
+        // rate = 1e9 per slot (i.e. 1e9 / 1e18 = 1e-9 of index per slot).
+        // After 100 slots, growth = 1e18 * 1e9 * 100 / 1e18 = 1e11.
+        let mut m = test_market(1_000_000_000, 0);
+        accrue_market(&mut m, &clock_at(100));
+        assert_eq!(m.borrow_index_e18, RATE_SCALE_E18 + 100_000_000_000);
+        assert_eq!(m.last_update_slot, 100);
+    }
+
+    #[test]
+    fn accrue_zero_rate_is_no_op_for_index() {
+        let mut m = test_market(0, 0);
+        accrue_market(&mut m, &clock_at(1_000_000));
+        assert_eq!(m.borrow_index_e18, RATE_SCALE_E18);
+        assert_eq!(m.last_update_slot, 1_000_000);
+    }
+
+    // ── accrue_position ─────────────────────────────────────
+
+    fn test_position(borrowed: u64, snapshot: u128) -> Position {
+        Position {
+            user: Pubkey::default(),
+            market: Pubkey::default(),
+            supplied: 0,
+            borrowed,
+            feed_id: [0u8; 32],
+            max_ltv_bps: 8000,
+            decimals: 9,
+            bump: 0,
+            borrow_index_snapshot_e18: snapshot,
+        }
+    }
+
+    #[test]
+    fn accrue_position_no_debt_just_updates_snapshot() {
+        let m = test_market(1_000_000_000, 0);
+        let mut m = m;
+        accrue_market(&mut m, &clock_at(100));
+        let mut p = test_position(0, RATE_SCALE_E18);
+        accrue_position(&mut p, &m);
+        assert_eq!(p.borrowed, 0);
+        assert_eq!(p.borrow_index_snapshot_e18, m.borrow_index_e18);
+    }
+
+    #[test]
+    fn accrue_position_grows_debt_proportionally() {
+        // Start with debt 1000 at snapshot = 1e18. After accrual the market
+        // index doubled. Debt should also double.
+        let mut m = test_market(0, 0);
+        m.borrow_index_e18 = 2 * RATE_SCALE_E18;
+        let mut p = test_position(1_000, RATE_SCALE_E18);
+        accrue_position(&mut p, &m);
+        assert_eq!(p.borrowed, 2_000);
+        assert_eq!(p.borrow_index_snapshot_e18, m.borrow_index_e18);
+    }
+
+    #[test]
+    fn accrue_position_idempotent() {
+        let m = test_market(0, 0);
+        let mut p = test_position(1_000, m.borrow_index_e18);
+        accrue_position(&mut p, &m);
+        let after = p.borrowed;
+        accrue_position(&mut p, &m);
+        assert_eq!(p.borrowed, after);
+    }
+
+    #[test]
+    fn accrue_position_zero_snapshot_initialises() {
+        // First time we see a position with a 0 snapshot, just adopt the
+        // market's index without touching `borrowed`.
+        let m = test_market(0, 0);
+        let mut p = test_position(500, 0);
+        accrue_position(&mut p, &m);
+        assert_eq!(p.borrowed, 500);
+        assert_eq!(p.borrow_index_snapshot_e18, m.borrow_index_e18);
+    }
 }

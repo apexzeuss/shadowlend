@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Credit, hidden in plain sight</title>
-    <script src="./config.js?v=8"></script>
+    <script src="./config.js?v=9"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -2565,7 +2565,7 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=8"></script>
+    <script type="module" src="./sl-client.js?v=9"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       // Display-only flavor, keyed by the market id in config.js. The real
@@ -3541,14 +3541,27 @@
 
       // Pulls the latest signatures that touched the program, decodes each one
       // into instruction + market, and renders the proof stream.
+      // Instructions we show in the public activity stream. Admin/setup
+      // calls (InitializeMarket, SetClaimAmount, InitUserStats) are plumbing,
+      // not lending, so they don't belong in the user-facing feed.
+      const PUBLIC_IX = new Set([
+        "Supply",
+        "Borrow",
+        "Withdraw",
+        "Repay",
+        "ClaimFaucet",
+        "RecordAction",
+      ]);
+
       async function loadRecentProofs(limit = 8) {
         try {
           const programId = window.SL?.PROGRAM_ID;
           if (!programId) return;
           const pidStr = programId.toString();
+          // Over-fetch so we still have `limit` rows after filtering out admin.
           const sigsRes = await rpcCall("getSignaturesForAddress", [
             pidStr,
-            { limit },
+            { limit: Math.max(limit * 3, 24) },
           ]);
           const sigs = sigsRes?.result || [];
           const decoded = await Promise.all(
@@ -3556,9 +3569,10 @@
           );
           proofJobs.length = 0;
           const now = Math.floor(Date.now() / 1000);
-          for (let i = 0; i < sigs.length; i++) {
+          for (let i = 0; i < sigs.length && proofJobs.length < limit; i++) {
             const s = sigs[i];
             const d = decoded[i] || {};
+            if (!d.kind || !PUBLIC_IX.has(d.kind)) continue;
             const age = s.blockTime ? now - s.blockTime : null;
             const ageTxt =
               age == null
@@ -3570,10 +3584,9 @@
                     : age < 86400
                       ? `${Math.floor(age / 3600)}h ago`
                       : `${Math.floor(age / 86400)}d ago`;
-            const kind = d.kind ? humanIxName(d.kind) : "on-chain action";
             proofJobs.push([
               s.err ? "failed" : "done",
-              kind,
+              humanIxName(d.kind),
               `${s.signature.slice(0, 6)}…${s.signature.slice(-6)} · slot ${s.slot}`,
               d.marketLabel || "—",
               ageTxt,

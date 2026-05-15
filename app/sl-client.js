@@ -276,6 +276,53 @@ export async function fetchAllMarkets() {
   );
 }
 
+// Cluster-wide aggregate stats for the hero card: total USD supplied / borrowed
+// across all markets (priced via Pyth), total faucet claims across markets,
+// and the current per-market USD prices. Returns null if reads failed.
+export async function fetchHeroStats() {
+  const rows = await fetchAllMarkets();
+  const prices = {};
+  await Promise.all(
+    rows.map(async (r) => {
+      try {
+        prices[r.id] = await resolveFreshestPrice(r.feedHex);
+      } catch {
+        prices[r.id] = null;
+      }
+    })
+  );
+
+  let totalSuppliedUsd = 0;
+  let totalBorrowedUsd = 0;
+  let totalClaims = 0;
+  for (const r of rows) {
+    if (!r.onchain) continue;
+    const p = prices[r.id];
+    const supply = Number(r.onchain.totalSupplied.toString()) / 10 ** r.decimals;
+    const borrow = Number(r.onchain.totalBorrowed.toString()) / 10 ** r.decimals;
+    const claims = Number(r.onchain.claimCount.toString());
+    totalClaims += claims;
+    if (p && p.price > 0) {
+      const usd = p.price * Math.pow(10, p.expo);
+      totalSuppliedUsd += supply * usd;
+      totalBorrowedUsd += borrow * usd;
+    }
+  }
+
+  const priceMap = {};
+  for (const r of rows) {
+    const p = prices[r.id];
+    priceMap[r.id] = p ? p.price * Math.pow(10, p.expo) : null;
+  }
+
+  return {
+    totalSuppliedUsd,
+    totalBorrowedUsd,
+    totalClaims,
+    prices: priceMap,
+  };
+}
+
 // True once at least one market exists on-chain.
 export async function isFaucetReady() {
   for (const m of MARKETS) {
@@ -674,6 +721,7 @@ window.SL = {
   marketPdas,
   fetchMarket,
   fetchAllMarkets,
+  fetchHeroStats,
   isFaucetReady,
   fetchClaimReceipt,
   fetchPosition,

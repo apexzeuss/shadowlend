@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Credit, hidden in plain sight</title>
-    <script src="./config.js?v=5"></script>
+    <script src="./config.js?v=6"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -2106,23 +2106,23 @@
             </div>
             <div class="stat">
               <span class="stat-key">Total supplied</span>
-              <span class="stat-val" data-countup="84.2" data-suffix="M">$0M</span>
+              <span class="stat-val" id="heroSupplied">—</span>
             </div>
             <div class="stat">
               <span class="stat-key">Total borrowed</span>
-              <span class="stat-val" data-countup="51.7" data-suffix="M">$0M</span>
+              <span class="stat-val" id="heroBorrowed">—</span>
             </div>
             <div class="stat">
-              <span class="stat-key">Proofs / 24h</span>
-              <span class="stat-val green" data-countup="12831" data-int="1">0</span>
+              <span class="stat-key">Faucet claims</span>
+              <span class="stat-val green" id="heroClaims">—</span>
             </div>
             <div class="stat">
-              <span class="stat-key">Privacy path</span>
-              <span class="stat-val small green">MXE + ElGamal</span>
+              <span class="stat-key">SOL · USDC · BTC</span>
+              <span class="stat-val small" id="heroPrices">—</span>
             </div>
             <div class="cipher-line">
-              <span class="tag">Last settled value</span>
-              <span id="heroCipher">0x8f3a c4b2 7e91 d68a 4f02 ab37 9c1d 0e44</span>
+              <span class="tag">Most recent action</span>
+              <span id="heroCipher">—</span>
             </div>
           </aside>
         </div>
@@ -2552,7 +2552,7 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=5"></script>
+    <script type="module" src="./sl-client.js?v=6"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       // Display-only flavor, keyed by the market id in config.js. The real
@@ -3084,6 +3084,8 @@
             `Sig ${sig.slice(0, 8)}… · refreshing on-chain state.`
           );
           await refreshUserState();
+          refreshHeroStats();
+          refreshHeroSignature();
         } catch (e) {
           btn?.classList.remove("loading");
           if (btn) btn.textContent = `Claim ${fmt(m.claimUi, 0)} ${m.label}`;
@@ -3203,6 +3205,8 @@
             `${amount} ${m.label} · ${sig.slice(0, 8)}…`
           );
           await refreshUserState();
+          refreshHeroStats();
+          refreshHeroSignature();
         } catch (e) {
           const msg = e?.message || String(e);
           let body = msg;
@@ -3280,16 +3284,35 @@
           .join(" ");
       }
 
-      function regenHeroCipher() {
-        const hex = "0123456789abcdef";
-        const out = [];
-        for (let g = 0; g < 8; g++) {
-          let b = "";
-          for (let i = 0; i < 4; i++)
-            b += hex[Math.floor(Math.random() * 16)];
-          out.push(b);
+      // Pulls the most recent signature that touched the program. Used to fill
+      // the "Most recent action" line in the hero card with a real on-chain
+      // reference instead of a rotating placeholder.
+      async function refreshHeroSignature() {
+        try {
+          const programId = window.SL?.PROGRAM_ID;
+          if (!programId) return;
+          const rpc = window.SHADOW_LEND_CONFIG.rpcUrl;
+          const res = await fetch(rpc, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "getSignaturesForAddress",
+              params: [programId.toString(), { limit: 1 }],
+            }),
+          });
+          const j = await res.json();
+          const sig = j?.result?.[0]?.signature;
+          if (sig) {
+            document.getElementById("heroCipher").textContent =
+              sig.slice(0, 6) + "…" + sig.slice(-6);
+          } else {
+            document.getElementById("heroCipher").textContent = "no actions yet";
+          }
+        } catch (e) {
+          console.warn("heroSignature failed:", e);
         }
-        document.getElementById("heroCipher").textContent = "0x" + out.join(" ");
       }
 
       // ── Reveal observer ─────────────────────────────────
@@ -3374,8 +3397,8 @@
         .querySelectorAll("[data-countup]")
         .forEach((el) => countObserver.observe(el));
 
-      // Cycle hero cipher
-      setInterval(regenHeroCipher, 3200);
+      // Refresh the hero card's "most recent action" signature every 20s.
+      setInterval(refreshHeroSignature, 20_000);
 
       // ── Modal accessibility: Esc + focus trap ───────────
       function openModals() {
@@ -3421,6 +3444,45 @@
 
       // ── Initial market load: pull on-chain totals into the cards, and
       //    warn only if no markets are deployed on this cluster.
+      // Compact USD formatter that picks a sensible unit. Real numbers only.
+      function fmtUsd(n) {
+        const v = Number(n || 0);
+        if (v >= 1_000_000) return "$" + (v / 1_000_000).toFixed(2) + "M";
+        if (v >= 1_000) return "$" + (v / 1_000).toFixed(2) + "K";
+        if (v >= 1) return "$" + v.toFixed(2);
+        if (v > 0) return "$" + v.toFixed(4);
+        return "$0";
+      }
+
+      async function refreshHeroStats() {
+        if (!window.SL) return;
+        try {
+          const s = await window.SL.fetchHeroStats();
+          document.getElementById("heroSupplied").textContent = fmtUsd(
+            s.totalSuppliedUsd
+          );
+          document.getElementById("heroBorrowed").textContent = fmtUsd(
+            s.totalBorrowedUsd
+          );
+          document.getElementById("heroClaims").textContent = Number(
+            s.totalClaims
+          ).toLocaleString();
+          const p = s.prices;
+          const px = (v) =>
+            v == null
+              ? "—"
+              : v >= 100
+                ? "$" + v.toFixed(0)
+                : v >= 1
+                  ? "$" + v.toFixed(2)
+                  : "$" + v.toFixed(4);
+          document.getElementById("heroPrices").textContent =
+            `${px(p.sol)} · ${px(p.usdc)} · ${px(p.btc)}`;
+        } catch (e) {
+          console.warn("refreshHeroStats:", e);
+        }
+      }
+
       async function bootMarkets() {
         try {
           await loadMarketData();
@@ -3428,6 +3490,8 @@
         } catch {
           renderFaucetBanner();
         }
+        refreshHeroStats();
+        refreshHeroSignature();
       }
 
       if (window.SL) {
@@ -3435,6 +3499,9 @@
       } else {
         window.addEventListener("sl-client-ready", bootMarkets, { once: true });
       }
+
+      // Keep hero stats in sync with the chain without hammering the RPC.
+      setInterval(refreshHeroStats, 30_000);
 
       function renderFaucetBanner() {
         if (document.getElementById("deployBanner")) return;

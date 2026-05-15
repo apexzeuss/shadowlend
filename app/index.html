@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Credit, hidden in plain sight</title>
-    <script src="./config.js?v=4"></script>
+    <script src="./config.js?v=5"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -2078,7 +2078,7 @@
         <div class="scene-num">01 / 07 — INTRO</div>
         <div class="wrap hero">
           <div class="hero-text reveal">
-            <div class="eyebrow">Private credit · simple flow</div>
+            <div class="eyebrow">01 · Private credit</div>
             <h1 class="headline">
               Credit, <em>hidden</em><br />
               in plain <span class="ghost">sight.</span>
@@ -2255,7 +2255,7 @@
             </div>
             <p class="scene-copy">
               Your number flows through encryption, secure compute, a yes/no
-              proof, and on-chain settlement — and at every step, only an
+              proof, and on-chain settlement and at every step, only an
               encrypted value or a boolean is visible.
             </p>
           </div>
@@ -2552,7 +2552,7 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=4"></script>
+    <script type="module" src="./sl-client.js?v=5"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       // Display-only flavor, keyed by the market id in config.js. The real
@@ -2838,6 +2838,10 @@
         if (window.SL) await window.SL.disconnect();
         state.wallet = null;
         state.stats = null;
+        state.health = null;
+        state.collateralUsd = 0;
+        state.debtUsd = 0;
+        state.maxBorrowableUsd = 0;
         // Drop this wallet's per-market position data, keep market totals.
         markets.forEach((m) =>
           Object.assign(m, {
@@ -2847,6 +2851,7 @@
             claimed: false,
             health: null,
             borrowable: 0,
+            priceUsd: null,
           })
         );
         renderMarkets();
@@ -2880,26 +2885,32 @@
         renderMarkets();
       }
 
-      // Connected: per-market balance / position / claim state for this wallet.
+      // Connected: per-market balance / position / claim state for this wallet,
+      // plus the global cross-asset health factor.
       async function refreshUserState() {
         if (!state.wallet || !window.SL) return;
         try {
-          const [marketState, stats] = await Promise.all([
+          const [userState, stats] = await Promise.all([
             window.SL.fetchUserMarketState(),
             window.SL.fetchUserStats(),
           ]);
-          marketState.forEach((ms) => {
-            Object.assign(findMarket(ms.id), {
-              onchain: ms.onchain,
-              balance: ms.balance,
-              supplied: ms.supplied,
-              borrowed: ms.borrowed,
-              claimed: ms.claimed,
-              health: ms.health,
-              borrowable: ms.borrowable,
+          const ms = userState.markets || [];
+          ms.forEach((row) => {
+            Object.assign(findMarket(row.id), {
+              onchain: row.onchain,
+              balance: row.balance,
+              supplied: row.supplied,
+              borrowed: row.borrowed,
+              claimed: row.claimed,
+              borrowable: row.borrowable,
+              priceUsd: row.priceUsd,
             });
           });
           state.stats = stats;
+          state.health = userState.health;
+          state.collateralUsd = userState.collateralUsd;
+          state.debtUsd = userState.debtUsd;
+          state.maxBorrowableUsd = userState.maxBorrowableUsd;
           state.ready = true;
         } catch (e) {
           console.warn("refreshUserState:", e);
@@ -2936,18 +2947,16 @@
                   </div>
                 </div>`;
             }
-            const healthTxt =
-              m.borrowed > 0
-                ? m.health == null
-                  ? "—"
-                  : m.health.toFixed(2)
-                : "no debt";
+            const priceTxt =
+              m.priceUsd != null
+                ? `$${fmt(m.priceUsd, m.priceUsd < 10 ? 4 : 2)} (Pyth)`
+                : "price unavailable";
             return `
               <div class="pos-rows">
                 <div class="pos-row">
                   <div>
                     <div class="pos-key">${m.label} · wallet balance</div>
-                    <div class="pos-hash">max LTV ${m.ltvPct} · health ${healthTxt}</div>
+                    <div class="pos-hash">${priceTxt} · LTV ${m.ltvPct}</div>
                   </div>
                   <div class="pos-val green">${fmt(m.balance)}</div>
                 </div>
@@ -2956,7 +2965,7 @@
                     <div class="pos-key">Supplied / Borrowed</div>
                     <div class="pos-hash">borrowable now: ${fmt(
                       m.borrowable || 0
-                    )} ${m.label}</div>
+                    )} ${m.label} (cross-asset)</div>
                   </div>
                   <div class="pos-val">${fmt(m.supplied)} / ${fmt(m.borrowed)}</div>
                 </div>
@@ -2991,20 +3000,38 @@
             </div>`
           : "";
 
+        // Cross-asset health summary: one block above per-market rows.
+        const usd = (v) => "$" + fmt(v || 0);
+        const healthLine = `
+          <div class="pos-rows" style="margin-bottom: 8px">
+            <div class="pos-row">
+              <div>
+                <div class="pos-key">Cross-asset health</div>
+                <div class="pos-hash">${usd(state.collateralUsd)} collateral · ${usd(
+          state.debtUsd
+        )} debt · ${usd(
+          Math.max(0, (state.maxBorrowableUsd || 0) - (state.debtUsd || 0))
+        )} headroom</div>
+              </div>
+              <div class="pos-val green">${
+                state.health == null ? "no debt" : state.health.toFixed(2)
+              }</div>
+            </div>
+          </div>`;
         body.innerHTML =
-          rows + statsRows + `<div class="history-list" id="historyList"></div>`;
+          healthLine +
+          rows +
+          statsRows +
+          `<div class="history-list" id="historyList"></div>`;
 
-        // Gauge: the lowest health factor across markets that carry debt.
-        const healths = markets
-          .filter((m) => m.borrowed > 0 && m.health != null)
-          .map((m) => m.health);
-        const worst = healths.length ? Math.min(...healths) : null;
+        // Drive the gauge from the global health factor.
+        const h = state.health;
         const total = 528;
-        const ratio = worst == null ? 0 : Math.min(1, worst / 2);
+        const ratio = h == null ? 0 : Math.min(1, h / 2);
         document.getElementById("gaugeArc").style.strokeDashoffset =
           total * (1 - ratio);
         document.getElementById("gaugeVal").textContent =
-          worst == null ? "—" : worst.toFixed(2);
+          h == null ? "—" : h.toFixed(2);
 
         renderHistory();
       }
@@ -3099,11 +3126,11 @@
           (action === "borrow" || action === "withdraw" ? " borrow" : "");
         document.getElementById("modalBtnText").textContent = `${verb} ${m.label}`;
         const hints = {
-          supply: `Deposits ${m.label} into the market vault as collateral.`,
-          borrow: `Up to ${m.ltvPct} of supplied ${m.label}. Borrowable now: ${fmt(
+          supply: `Deposits ${m.label} into the vault. Counts toward your cross-asset borrow limit.`,
+          borrow: `Cross-asset borrowable now: ${fmt(
             m.borrowable || 0
-          )}.`,
-          withdraw: `You have ${fmt(m.supplied)} ${m.label} supplied.`,
+          )} ${m.label}. Backed by your total collateral × each market's LTV.`,
+          withdraw: `You have ${fmt(m.supplied)} ${m.label} supplied. Health check runs across all your positions.`,
           repay: `Outstanding debt: ${fmt(m.borrowed)} ${m.label}.`,
         };
         document.getElementById("modalConstraint").textContent =
@@ -3179,17 +3206,23 @@
         } catch (e) {
           const msg = e?.message || String(e);
           let body = msg;
-          if (/ExceedsLtv|exceed the market/i.test(msg)) {
-            body = `That borrow exceeds the ${m.ltvPct} max LTV on your supplied ${m.label}.`;
+          if (/ExceedsLtv|exceed/i.test(msg)) {
+            body = `That borrow exceeds your total collateral × LTV across markets. Supply more first, or borrow less.`;
           } else if (/WouldBeUnhealthy|undercollateralized/i.test(msg)) {
             body =
-              "Withdrawing that much would leave your borrow undercollateralized.";
+              "Withdrawing that much would push your global health below 1. Repay some debt first.";
           } else if (/InsufficientLiquidity/i.test(msg)) {
             body = "The vault does not have enough liquidity for this borrow yet.";
           } else if (/NothingToRepay/i.test(msg)) {
             body = "You have no outstanding debt in this market.";
           } else if (/InsufficientCollateral/i.test(msg)) {
             body = `You have not supplied that much ${m.label}.`;
+          } else if (/StalePrice/i.test(msg)) {
+            body =
+              "Pyth price update is older than 5 minutes. Wait a moment and try again.";
+          } else if (/BadPriceFeed|BadPositionAccount|BadRemainingAccounts/i.test(msg)) {
+            body =
+              "Failed to read on-chain price or position data. Try again, or hard-reload the page.";
           } else if (
             /insufficient|not enough|debit an account|prior credit/i.test(msg)
           ) {

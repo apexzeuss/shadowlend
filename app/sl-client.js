@@ -24,8 +24,17 @@ const POSITION_SEED = new TextEncoder().encode("position");
 const STATS_SEED = new TextEncoder().encode("stats");
 
 const PROGRAM_ID = new PublicKey(CONFIG.programId);
+const PYTH_RECEIVER = new PublicKey(
+  CONFIG.pythReceiverProgramId ||
+    "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
+);
 const connection = new Connection(CONFIG.rpcUrl, "confirmed");
 const MARKETS = CONFIG.markets || [];
+// Bytes 41-72 of a PriceUpdateV2 account hold the 32-byte feed_id.
+const PRICE_UPDATE_FEED_OFFSET = 41;
+const PRICE_UPDATE_SIZE = 134;
+// publish_time sits at offset 93 (8 bytes LE i64) inside PriceUpdateV2.
+const PRICE_UPDATE_PUBLISH_OFFSET = 93;
 
 let idl = null;
 let program = null; // signing program (built once a wallet connects)
@@ -317,10 +326,16 @@ export async function fetchTokenBalance(marketId) {
   }
 }
 
-// One round-trip the UI can lean on: per-market state for the connected wallet.
+// One round-trip the UI can lean on: per-market state for the connected wallet
+// plus the global cross-asset health factor (USD-priced via Pyth).
+//
+// Returns { markets: [...], health, collateralUsd, debtUsd, maxBorrowableUsd }.
+// `health` is null when there is no debt; the UI shows that as "no debt".
 export async function fetchUserMarketState() {
-  if (!wallet) return [];
-  return Promise.all(
+  if (!wallet) return { markets: [], health: null };
+
+  // First pass: pull everything that doesn't depend on prices.
+  const rows = await Promise.all(
     MARKETS.map(async (m) => {
       const [onchain, receipt, position, balance] = await Promise.all([
         fetchMarket(m.id),
@@ -328,24 +343,73 @@ export async function fetchUserMarketState() {
         fetchPosition(m.id),
         fetchTokenBalance(m.id),
       ]);
-      const supplied = position?.supplied || 0;
-      const borrowed = position?.borrowed || 0;
-      // Health factor: collateral value at max LTV divided by debt. >1 is safe.
-      const maxLtv = m.maxLtvBps / 10_000;
-      const health =
-        borrowed > 0 ? (supplied * maxLtv) / borrowed : null;
       return {
-        ...m,
+        m,
         onchain,
         claimed: !!receipt,
         balance,
-        supplied,
-        borrowed,
-        health,
-        borrowable: Math.max(0, supplied * maxLtv - borrowed),
+        supplied: position?.supplied || 0,
+        borrowed: position?.borrowed || 0,
       };
     })
   );
+
+  // Pull prices once. If the network call fails for a feed, we treat that
+  // market as price-less (excluded from the health calc) rather than erroring.
+  const prices = {};
+  await Promise.all(
+    rows.map(async (r) => {
+      try {
+        prices[r.m.id] = await resolveFreshestPrice(r.m.feedHex);
+      } catch (e) {
+        console.warn("[ShadowLend] price lookup failed for", r.m.id, e);
+        prices[r.m.id] = null;
+      }
+    })
+  );
+
+  const usd = (amount, p) => {
+    if (!p || p.price <= 0) return 0;
+    // amount is in whole tokens (already divided by 10^decimals).
+    return amount * p.price * Math.pow(10, p.expo);
+  };
+
+  let collateralUsd = 0;
+  let debtUsd = 0;
+  let maxBorrowableUsd = 0;
+  for (const r of rows) {
+    const p = prices[r.m.id];
+    const sUsd = usd(r.supplied, p);
+    const bUsd = usd(r.borrowed, p);
+    collateralUsd += sUsd;
+    debtUsd += bUsd;
+    maxBorrowableUsd += sUsd * (r.m.maxLtvBps / 10_000);
+  }
+  const headroomUsd = Math.max(0, maxBorrowableUsd - debtUsd);
+  const health = debtUsd > 0 ? maxBorrowableUsd / debtUsd : null;
+
+  const markets = rows.map((r) => {
+    const p = prices[r.m.id];
+    // How much MORE of *this* token the user can borrow against their global
+    // collateral right now.
+    const borrowable =
+      p && p.price > 0
+        ? headroomUsd / (p.price * Math.pow(10, p.expo))
+        : 0;
+    return {
+      ...r.m,
+      onchain: r.onchain,
+      claimed: r.claimed,
+      balance: r.balance,
+      supplied: r.supplied,
+      borrowed: r.borrowed,
+      priceUsd: p ? p.price * Math.pow(10, p.expo) : null,
+      health,
+      borrowable,
+    };
+  });
+
+  return { markets, health, collateralUsd, debtUsd, maxBorrowableUsd };
 }
 
 // ── User stats (the private-action / proof demo) ───────────
@@ -409,7 +473,99 @@ export async function claimFaucet(marketId) {
     .rpc();
 }
 
-// supply / withdraw / borrow / repay all hit the same account context.
+// Cache the freshest PriceUpdateV2 per feed. Devnet sponsored accounts rotate,
+// so we resolve at call time and cache briefly. The cached entry carries both
+// the account address (used as a transaction account) and the decoded price
+// (used for client-side health-factor math).
+const priceUpdateCache = new Map(); // feedHex -> { pk, price, expo, publishTime, ts }
+const PRICE_CACHE_MS = 30_000;
+
+async function resolveFreshestPrice(feedHex) {
+  const cached = priceUpdateCache.get(feedHex);
+  if (cached && Date.now() - cached.ts < PRICE_CACHE_MS) return cached;
+
+  const feedBytes = hexToBytes(feedHex);
+  const feedB58 = base58Encode(feedBytes);
+  const accts = await connection.getProgramAccounts(PYTH_RECEIVER, {
+    filters: [
+      { dataSize: PRICE_UPDATE_SIZE },
+      { memcmp: { offset: PRICE_UPDATE_FEED_OFFSET, bytes: feedB58 } },
+    ],
+  });
+  if (accts.length === 0)
+    throw new Error(`No PriceUpdateV2 found on-chain for feed ${feedHex.slice(0, 8)}…`);
+  let best = null;
+  for (const a of accts) {
+    const buf = a.account.data;
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const publishTime = Number(dv.getBigInt64(PRICE_UPDATE_PUBLISH_OFFSET, true));
+    if (!best || publishTime > best.publishTime) {
+      const price = Number(dv.getBigInt64(73, true)); // i64 price
+      const expo = dv.getInt32(85, true); // i32 exponent
+      best = { pk: a.pubkey, price, expo, publishTime };
+    }
+  }
+  priceUpdateCache.set(feedHex, { ...best, ts: Date.now() });
+  return priceUpdateCache.get(feedHex);
+}
+
+// Convenience used by transactions that only need the account.
+async function resolvePriceUpdate(feedHex) {
+  return (await resolveFreshestPrice(feedHex)).pk;
+}
+
+function hexToBytes(h) {
+  const out = new Uint8Array(h.length / 2);
+  for (let i = 0; i < out.length; i++)
+    out[i] = parseInt(h.substr(i * 2, 2), 16);
+  return out;
+}
+
+// Minimal base58 encoder (Bitcoin alphabet) so we don't need bs58 from npm.
+function base58Encode(bytes) {
+  const ALPHA = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let zeros = 0;
+  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
+  const digits = [0];
+  for (let i = zeros; i < bytes.length; i++) {
+    let carry = bytes[i];
+    for (let j = 0; j < digits.length; j++) {
+      carry += digits[j] << 8;
+      digits[j] = carry % 58;
+      carry = (carry / 58) | 0;
+    }
+    while (carry > 0) {
+      digits.push(carry % 58);
+      carry = (carry / 58) | 0;
+    }
+  }
+  let out = "";
+  for (let i = 0; i < zeros; i++) out += ALPHA[0];
+  for (let i = digits.length - 1; i >= 0; i--) out += ALPHA[digits[i]];
+  return out;
+}
+
+// Returns [{ position, priceUpdate }] for every market other than `excludeId`
+// where this wallet has any supplied or borrowed balance — those positions
+// feed the program's global health check.
+async function collectCrossAccounts(excludeId) {
+  if (!wallet) return [];
+  const out = [];
+  for (const m of MARKETS) {
+    if (m.id === excludeId) continue;
+    const pos = await fetchPosition(m.id);
+    if (!pos || (pos.supplied === 0 && pos.borrowed === 0)) continue;
+    const { position } = marketPdas(m.id, wallet.publicKey);
+    const priceUpdate = await resolvePriceUpdate(m.feedHex);
+    out.push({ pubkey: position, isWritable: false, isSigner: false });
+    out.push({ pubkey: priceUpdate, isWritable: false, isSigner: false });
+  }
+  return out;
+}
+
+// supply / repay share one account context (no price check needed). borrow /
+// withdraw take a PriceUpdateV2 for this market plus (position, priceUpdate)
+// pairs in remaining_accounts for the global health check.
 async function modifyPosition(method, marketId, uiAmount) {
   if (!program || !wallet) throw new Error("not connected");
   const { cfg, mint, market, authority, vault, position, ata } = marketPdas(
@@ -419,20 +575,30 @@ async function modifyPosition(method, marketId, uiAmount) {
   const amount = toBase(uiAmount, cfg.decimals);
   if (amount.lten(0)) throw new Error("amount must be greater than zero");
 
-  return await program.methods[method](amount)
-    .accounts({
-      user: wallet.publicKey,
-      market,
-      mint,
-      position,
-      vault,
-      authority,
-      userAta: ata,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
+  const needsPrice = method === "borrow" || method === "withdraw";
+
+  const accounts = {
+    user: wallet.publicKey,
+    market,
+    mint,
+    position,
+    vault,
+    authority,
+    userAta: ata,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    systemProgram: SystemProgram.programId,
+  };
+  if (needsPrice) {
+    accounts.priceUpdate = await resolvePriceUpdate(cfg.feedHex);
+  }
+
+  let builder = program.methods[method](amount).accounts(accounts);
+  if (needsPrice) {
+    const remaining = await collectCrossAccounts(marketId);
+    if (remaining.length) builder = builder.remainingAccounts(remaining);
+  }
+  return await builder.rpc();
 }
 
 export const supply = (marketId, uiAmount) =>

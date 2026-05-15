@@ -45,7 +45,7 @@ const claimPda = {
 };
 const statsPda = { seeds: [seedConst("stats"), seedAccount("user")] };
 
-// supply / withdraw / borrow / repay all share the ModifyPosition context.
+// supply / repay use this context (no price check needed).
 const modifyPositionAccounts = [
   { name: "user", writable: true, signer: true },
   { name: "market", writable: true, pda: marketPda() },
@@ -59,10 +59,31 @@ const modifyPositionAccounts = [
   { name: "system_program", address: SystemProgram },
 ];
 
-const modifyIx = (name) => ({
+// borrow / withdraw add a Pyth PriceUpdateV2 for this market's feed.
+const modifyPositionWithPriceAccounts = [
+  { name: "user", writable: true, signer: true },
+  { name: "market", writable: true, pda: marketPda() },
+  { name: "mint" },
+  { name: "position", writable: true, pda: positionPda },
+  { name: "vault", writable: true, pda: vaultPda },
+  { name: "authority", pda: authPda },
+  { name: "user_ata", writable: true },
+  { name: "price_update" },
+  { name: "token_program", address: TokenProgram },
+  { name: "associated_token_program", address: AssociatedTokenProgram },
+  { name: "system_program", address: SystemProgram },
+];
+
+const supplyOrRepayIx = (name) => ({
   name,
   discriminator: ixDisc(name),
   accounts: modifyPositionAccounts,
+  args: [{ name: "amount", type: "u64" }],
+});
+const borrowOrWithdrawIx = (name) => ({
+  name,
+  discriminator: ixDisc(name),
+  accounts: modifyPositionWithPriceAccounts,
   args: [{ name: "amount", type: "u64" }],
 });
 
@@ -90,6 +111,7 @@ const idl = {
       args: [
         { name: "amount_per_claim", type: "u64" },
         { name: "max_ltv_bps", type: "u16" },
+        { name: "feed_id", type: { array: ["u8", 32] } },
       ],
     },
     {
@@ -117,10 +139,10 @@ const idl = {
       ],
       args: [],
     },
-    modifyIx("supply"),
-    modifyIx("withdraw"),
-    modifyIx("borrow"),
-    modifyIx("repay"),
+    supplyOrRepayIx("supply"),
+    borrowOrWithdrawIx("withdraw"),
+    borrowOrWithdrawIx("borrow"),
+    supplyOrRepayIx("repay"),
     {
       name: "init_user_stats",
       discriminator: ixDisc("init_user_stats"),
@@ -158,25 +180,28 @@ const idl = {
   errors: [
     { code: 6000, name: "NotAdmin", msg: "Caller is not the market admin." },
     { code: 6001, name: "MintMismatch", msg: "Mint account does not match the market config." },
-    { code: 6002, name: "VaultMismatch", msg: "Vault account does not match the market config." },
-    { code: 6003, name: "BadLtv", msg: "Max LTV must be between 1 and 9999 bps." },
-    { code: 6004, name: "ZeroAmount", msg: "Amount must be greater than zero." },
-    { code: 6005, name: "ExceedsLtv", msg: "Borrow would exceed the market's max LTV." },
+    { code: 6002, name: "BadLtv", msg: "Max LTV must be between 1 and 9999 bps." },
+    { code: 6003, name: "ZeroAmount", msg: "Amount must be greater than zero." },
+    { code: 6004, name: "ExceedsLtv", msg: "Borrow would exceed the user's total collateral × LTV." },
     {
-      code: 6006,
+      code: 6005,
       name: "WouldBeUnhealthy",
-      msg: "Withdrawing this much would leave the position undercollateralized.",
+      msg: "Withdrawing this much would leave the user undercollateralized.",
     },
-    { code: 6007, name: "InsufficientCollateral", msg: "Not enough supplied collateral." },
+    { code: 6006, name: "InsufficientCollateral", msg: "Not enough supplied collateral in this market." },
     {
-      code: 6008,
+      code: 6007,
       name: "InsufficientLiquidity",
       msg: "Vault does not have enough liquidity for this borrow.",
     },
-    { code: 6009, name: "NothingToRepay", msg: "Position has no outstanding debt to repay." },
-    { code: 6010, name: "Overflow", msg: "Arithmetic overflow." },
-    { code: 6011, name: "Unauthorized", msg: "Stats account does not belong to this signer." },
-    { code: 6012, name: "Overflow", msg: "Arithmetic overflow." },
+    { code: 6008, name: "NothingToRepay", msg: "Position has no outstanding debt to repay." },
+    { code: 6009, name: "Overflow", msg: "Arithmetic overflow." },
+    { code: 6010, name: "BadRemainingAccounts", msg: "remaining_accounts must be (position, price_update) pairs." },
+    { code: 6011, name: "BadPositionAccount", msg: "Position account is not owned by this program or not this user's." },
+    { code: 6012, name: "BadPriceFeed", msg: "Price feed account is invalid or the feed id does not match." },
+    { code: 6013, name: "StalePrice", msg: "Price update is older than the maximum accepted age." },
+    { code: 6014, name: "Unauthorized", msg: "Stats account does not belong to this signer." },
+    { code: 6015, name: "Overflow", msg: "Arithmetic overflow." },
   ],
   types: [
     {
@@ -186,9 +211,9 @@ const idl = {
         fields: [
           { name: "admin", type: "pubkey" },
           { name: "mint", type: "pubkey" },
-          { name: "vault", type: "pubkey" },
           { name: "amount_per_claim", type: "u64" },
           { name: "max_ltv_bps", type: "u16" },
+          { name: "feed_id", type: { array: ["u8", 32] } },
           { name: "total_supplied", type: "u64" },
           { name: "total_borrowed", type: "u64" },
           { name: "total_claimed", type: "u64" },
@@ -207,6 +232,9 @@ const idl = {
           { name: "market", type: "pubkey" },
           { name: "supplied", type: "u64" },
           { name: "borrowed", type: "u64" },
+          { name: "feed_id", type: { array: ["u8", 32] } },
+          { name: "max_ltv_bps", type: "u16" },
+          { name: "decimals", type: "u8" },
           { name: "bump", type: "u8" },
         ],
       },

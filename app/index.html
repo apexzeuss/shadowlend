@@ -8,8 +8,8 @@
     />
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
-    <title>ShadowLend — Credit, hidden in plain sight</title>
-    <script src="./config.js?v=10"></script>
+    <title>ShadowLend — Cross-asset lending on Solana</title>
+    <script src="./config.js?v=11"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -2071,7 +2071,7 @@
         <div class="brand-mark"></div>
         <div>
           <div class="brand-name">ShadowLend</div>
-          <div class="brand-sub">Private credit · Solana × Arcium</div>
+          <div class="brand-sub">Cross-asset credit · Solana × Pyth</div>
         </div>
       </div>
       <nav class="top-links" aria-label="Page sections">
@@ -2091,23 +2091,24 @@
         <div class="scene-num">01 / 07 — INTRO</div>
         <div class="wrap hero">
           <div class="hero-text reveal">
-            <div class="eyebrow">01 · Private credit</div>
+            <div class="eyebrow">01 · Cross-asset credit</div>
             <h1 class="headline">
-              Credit, <em>hidden</em><br />
-              in plain <span class="ghost">sight.</span>
+              Credit, on <em>real</em><br />
+              <span class="ghost">on-chain</span> markets.
             </h1>
             <p class="hero-copy">
-              ShadowLend lets you supply collateral and borrow on Solana while
-              your exact balances stay private. Amounts are encrypted in your
-              browser, verified through Arcium's MXE proof path, then settled
-              on-chain as encrypted state.
+              ShadowLend is a cross-asset lending protocol on Solana devnet.
+              Claim test SOL, USDC, or BTC, supply any of them as collateral,
+              and borrow the others up to each market's LTV. Health is checked
+              live against Pyth prices. Private settlement through Arcium MXE
+              is on the roadmap.
             </p>
             <div class="hero-actions">
               <a class="cta" href="#markets">
                 Open markets <span class="arrow">→</span>
               </a>
               <a class="cta ghost" href="#flow">
-                See proof flow <span class="arrow">→</span>
+                How it works <span class="arrow">→</span>
               </a>
             </div>
           </div>
@@ -2141,21 +2142,23 @@
         </div>
       </section>
 
-      <!-- ─── SCENE 02 — CIPHER ──────────────────────────── -->
+      <!-- ─── SCENE 02 — PRIVACY PREVIEW ──────────────────── -->
       <section class="scene" id="cipher">
-        <div class="scene-num">02 / 07 — ENCRYPTION</div>
+        <div class="scene-num">02 / 07 — PRIVACY PREVIEW</div>
         <div class="wrap">
           <div class="scene-head reveal">
             <div>
-              <div class="eyebrow">02 · Live encryption</div>
+              <div class="eyebrow">02 · Privacy layer (preview)</div>
               <h2 class="scene-title">
-                Your amount never <em>leaves</em> the browser.
+                What private settlement <em>will</em> look like.
               </h2>
             </div>
             <p class="scene-copy">
-              Drag the slider. Watch a plain number become an encrypted block
-              before it ever touches the network. Only a yes/no proof reaches
-              the chain never your balance.
+              Today, every supply and borrow is a public SPL transfer on
+              devnet. This slider previews the Arcium MXE path we're building
+              next: amounts encrypted in the browser, only a yes/no proof
+              reaches the chain. It is a demo of the planned flow, not the
+              current one.
             </p>
           </div>
 
@@ -2222,11 +2225,11 @@
             </div>
 
             <div class="demo-card reveal" data-stagger="3">
-              <div class="demo-label">Encrypted — what the chain sees</div>
+              <div class="demo-label">Encrypted — what the chain would see</div>
               <div class="demo-cipher" id="demoCipher"></div>
               <div class="demo-foot">
-                <span><span class="dot"></span>ElGamal · Curve25519</span>
-                <span><span class="dot"></span>MXE-verified</span>
+                <span><span class="dot"></span>Demo encryption · not live</span>
+                <span><span class="dot"></span>Arcium MXE · planned</span>
               </div>
             </div>
           </div>
@@ -2241,13 +2244,14 @@
             <div>
               <div class="eyebrow">03 · Choose a market</div>
               <h2 class="scene-title">
-                Three rails. <em>Same</em> private settlement.
+                Three rails. <em>Same</em> settlement path.
               </h2>
             </div>
             <p class="scene-copy">
-              Tap a market to inspect its risk settings. Supply and borrow both
-              issue private action tickets that hit Arcium first, then land
-              on-chain as encrypted state.
+              Tap a market to inspect its risk settings. Supply and borrow
+              move real SPL tokens into a per-market vault PDA on devnet. The
+              cross-asset health check is priced by Pyth at the time of the
+              action.
             </p>
           </div>
 
@@ -2255,21 +2259,22 @@
         </div>
       </section>
 
-      <!-- ─── SCENE 04 — PROOF FLOW ──────────────────────── -->
+      <!-- ─── SCENE 04 — BORROW FLOW ──────────────────────── -->
       <section class="scene" id="flow">
-        <div class="scene-num">04 / 07 — PROOF FLOW</div>
+        <div class="scene-num">04 / 07 — BORROW FLOW</div>
         <div class="wrap">
           <div class="scene-head reveal">
             <div>
               <div class="eyebrow">04 · How a borrow clears</div>
               <h2 class="scene-title">
-                Four steps. <em>Zero</em> balance leaks.
+                Four steps, <em>all</em> on devnet.
               </h2>
             </div>
             <p class="scene-copy">
-              Your number flows through encryption, secure compute, a yes/no
-              proof, and on-chain settlement and at every step, only an
-              encrypted value or a boolean is visible.
+              This is the real path your transaction takes today. Each step is
+              a public Solana instruction, signed by your wallet, settled by the
+              ShadowLend program at
+              <code>5jqXbgEx…bZCF</code>.
             </p>
           </div>
 
@@ -2278,39 +2283,42 @@
             <div class="flow-grid">
               <div class="flow-step reveal" data-stagger="1">
                 <div class="flow-num">1</div>
-                <div class="flow-title">Encrypt locally</div>
+                <div class="flow-title">Claim test tokens</div>
                 <p class="flow-copy">
-                  Your amount is encrypted in the browser before any request
-                  fires. The plain number never crosses the wire.
+                  The market's faucet mints SOL, USDC, or BTC test tokens to
+                  your associated token account. One claim per wallet, per
+                  market, enforced by a ClaimReceipt PDA.
                 </p>
-                <span class="flow-tag">browser</span>
+                <span class="flow-tag">claim_faucet</span>
               </div>
               <div class="flow-step reveal" data-stagger="2">
                 <div class="flow-num">2</div>
-                <div class="flow-title">MXE computes</div>
+                <div class="flow-title">Supply as collateral</div>
                 <p class="flow-copy">
-                  Arcium's private compute layer checks the rule LTV bound,
-                  health factor, supply cap on the encrypted amount.
+                  Tokens move from your ATA into the market's PDA-owned vault.
+                  Your Position account records the supplied amount.
                 </p>
-                <span class="flow-tag">arcium</span>
+                <span class="flow-tag">supply</span>
               </div>
               <div class="flow-step reveal" data-stagger="3">
                 <div class="flow-num">3</div>
-                <div class="flow-title">Return a proof</div>
+                <div class="flow-title">Borrow against your total</div>
                 <p class="flow-copy">
-                  Only the boolean result is published. The program sees
-                  whether the action is valid, never your underlying balance.
+                  The program reads every Position you have, prices each one
+                  via Pyth, and checks total debt against total collateral × LTV
+                  before transferring tokens out of the vault.
                 </p>
-                <span class="flow-tag">proof</span>
+                <span class="flow-tag">borrow</span>
               </div>
               <div class="flow-step reveal" data-stagger="4">
                 <div class="flow-num">4</div>
-                <div class="flow-title">Settle on Solana</div>
+                <div class="flow-title">Repay or withdraw</div>
                 <p class="flow-copy">
-                  The position is updated using encrypted state and proof refs.
-                  Public state never reveals the size of your position.
+                  Repay drops your debt and frees collateral. Withdraw checks
+                  health on the way out so a position can never leave itself
+                  undercollateralized.
                 </p>
-                <span class="flow-tag">solana</span>
+                <span class="flow-tag">repay / withdraw</span>
               </div>
             </div>
           </div>
@@ -2325,12 +2333,13 @@
             <div>
               <div class="eyebrow">05 · Track your position</div>
               <h2 class="scene-title">
-                Read locally. <em>Prove</em> globally.
+                One wallet, <em>every</em> market.
               </h2>
             </div>
             <p class="scene-copy">
-              A connected wallet decrypts position state in-browser. The chain
-              keeps an encrypted ledger; you keep the readable one.
+              Your position lives in a per-(wallet, market) PDA on devnet. The
+              dashboard reads each one directly, prices it via Pyth, and shows
+              you a single cross-asset health factor.
             </p>
           </div>
 
@@ -2392,8 +2401,8 @@
                 </div>
               </div>
               <p class="empty" style="margin-top: 4px; text-align: center">
-                Below 1.0 the position can be liquidated by anyone, using a
-                public proof but private balances.
+                Below 1.0 the position is undercollateralized. Liquidation is
+                on the way.
               </p>
             </aside>
           </div>
@@ -2457,20 +2466,21 @@
         <div class="scene-num">07 / 07 — ENTER</div>
         <div class="wrap">
           <div class="reveal">
-            <div class="eyebrow cta-eyebrow">Enter the shadow</div>
+            <div class="eyebrow cta-eyebrow">Try it on devnet</div>
             <h2 class="cta-headline">
-              Borrow without <em>broadcasting.</em>
+              Borrow on <em>real</em> markets.
             </h2>
             <p class="cta-sub">
-              Private lending on Solana, settled through Arcium's MXE proof
-              path. Connect a wallet, claim test tokens, and open the flow.
+              Cross-asset lending on Solana devnet, priced live by Pyth.
+              Connect a wallet, claim test tokens, supply some, borrow against
+              your total.
             </p>
             <div class="cta-actions">
               <button class="cta" onclick="onConnectButton()">
                 Connect wallet <span class="arrow">→</span>
               </button>
               <a class="cta ghost" href="#flow">
-                Read the proof flow <span class="arrow">→</span>
+                Read the borrow flow <span class="arrow">→</span>
               </a>
             </div>
           </div>
@@ -2479,8 +2489,8 @@
     </main>
 
     <footer class="footer">
-      <span>© ShadowLend prototype · 2026</span>
-      <span>Solana · Arcium MXE · ElGamal Curve25519</span>
+      <span>© ShadowLend · 2026</span>
+      <span>Solana devnet · Pyth · Anchor 0.30</span>
     </footer>
 
     <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
@@ -2559,13 +2569,13 @@
     </div>
 
     <div class="toast" id="toast">
-      <div class="toast-title" id="toastTitle">Proof job queued</div>
+      <div class="toast-title" id="toastTitle">Action submitted</div>
       <div class="toast-msg" id="toastMsg">
-        Private settlement job staged.
+        Action staged.
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=10"></script>
+    <script type="module" src="./sl-client.js?v=11"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       // Display-only flavor, keyed by the market id in config.js. The real
@@ -2577,7 +2587,7 @@
           sub: "Native collateral",
           oracle: "Pyth SOL/USD",
           spark: [22, 26, 24, 29, 28, 34, 31, 38, 36, 41, 39, 45],
-          copy: "Native collateral market with private LTV checks through the MXE proof path.",
+          copy: "Native-asset market. 80% max LTV, priced live by Pyth SOL/USD.",
         },
         usdc: {
           mark: "usdc",
@@ -2585,7 +2595,7 @@
           sub: "Stable borrow leg",
           oracle: "Pyth USDC/USD",
           spark: [40, 38, 41, 42, 39, 43, 44, 41, 45, 46, 44, 47],
-          copy: "Stable asset market for debt and liquidity management with encrypted position accounting.",
+          copy: "Stable-asset market. 85% max LTV, priced live by Pyth USDC/USD.",
         },
         btc: {
           mark: "wbtc",
@@ -2593,7 +2603,7 @@
           sub: "Conservative collateral",
           oracle: "Pyth BTC/USD",
           spark: [30, 32, 31, 35, 34, 33, 36, 38, 37, 40, 39, 42],
-          copy: "Lower-LTV collateral market for larger positions and conservative private borrowing.",
+          copy: "Conservative-collateral market. 75% max LTV, priced live by Pyth BTC/USD.",
         },
       };
 
@@ -3002,7 +3012,7 @@
           ? `<div class="pos-rows">
               <div class="pos-row">
                 <div>
-                  <div class="pos-key">Private actions recorded</div>
+                  <div class="pos-key">On-chain actions recorded</div>
                   <div class="pos-hash">UserStats PDA · proofs ${stats.proofsSubmitted}</div>
                 </div>
                 <div class="pos-val">${stats.supplies}·${stats.borrows}·${stats.repays}</div>

@@ -121,6 +121,10 @@
               32
             ]
           }
+        },
+        {
+          "name": "borrow_rate_per_slot_e18",
+          "type": "u64"
         }
       ]
     },
@@ -1268,15 +1272,23 @@
             }
           },
           {
+            "name": "borrow_rate_per_slot_e18",
+            "type": "u64"
+          },
+          {
+            "name": "borrow_index_e18",
+            "type": "u128"
+          },
+          {
+            "name": "last_update_slot",
+            "type": "u64"
+          },
+          {
             "name": "total_supplied",
             "type": "u64"
           },
           {
             "name": "total_borrowed",
-            "type": "u64"
-          },
-          {
-            "name": "total_claimed",
             "type": "u64"
           },
           {
@@ -1335,6 +1347,10 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "borrow_index_snapshot_e18",
+            "type": "u128"
           }
         ]
       }

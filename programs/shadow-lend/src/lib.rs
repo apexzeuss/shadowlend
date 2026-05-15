@@ -19,6 +19,9 @@ pub const MAX_PRICE_AGE_SEC: u64 = 300;
 /// Liquidator bonus when seizing collateral from an underwater position.
 /// 500 bps = 5%.
 pub const LIQUIDATION_BONUS_BPS: u128 = 500;
+/// Fixed-point scale for the per-market borrow index and per-slot rate.
+/// 1e18, the same convention Compound uses.
+pub const RATE_SCALE_E18: u128 = 1_000_000_000_000_000_000;
 
 #[program]
 pub mod shadow_lend {
@@ -31,20 +34,24 @@ pub mod shadow_lend {
         amount_per_claim: u64,
         max_ltv_bps: u16,
         feed_id: [u8; 32],
+        borrow_rate_per_slot_e18: u64,
     ) -> Result<()> {
         require!(
             max_ltv_bps > 0 && (max_ltv_bps as u128) < BPS_DENOMINATOR,
             MarketError::BadLtv
         );
+        let clock = Clock::get()?;
         let market = &mut ctx.accounts.market;
         market.admin = ctx.accounts.admin.key();
         market.mint = ctx.accounts.mint.key();
         market.amount_per_claim = amount_per_claim;
         market.max_ltv_bps = max_ltv_bps;
         market.feed_id = feed_id;
+        market.borrow_rate_per_slot_e18 = borrow_rate_per_slot_e18;
+        market.borrow_index_e18 = RATE_SCALE_E18;
+        market.last_update_slot = clock.slot;
         market.total_supplied = 0;
         market.total_borrowed = 0;
-        market.total_claimed = 0;
         market.claim_count = 0;
         market.bump = ctx.bumps.market;
         market.authority_bump = ctx.bumps.authority;
@@ -92,10 +99,6 @@ pub mod shadow_lend {
         receipt.claimed_at = clock.unix_timestamp;
         receipt.bump = ctx.bumps.receipt;
 
-        market.total_claimed = market
-            .total_claimed
-            .checked_add(amount)
-            .ok_or(MarketError::Overflow)?;
         market.claim_count = market
             .claim_count
             .checked_add(1)
@@ -114,6 +117,8 @@ pub mod shadow_lend {
     /// needed — adding collateral can only improve a position's health.
     pub fn supply(ctx: Context<ModifyPosition>, amount: u64) -> Result<()> {
         require!(amount > 0, MarketError::ZeroAmount);
+        let clock = Clock::get()?;
+        accrue_market(&mut ctx.accounts.market, &clock);
         let position = &mut ctx.accounts.position;
         let market_ref = &ctx.accounts.market;
         if position.user == Pubkey::default() {
@@ -123,6 +128,9 @@ pub mod shadow_lend {
             position.feed_id = market_ref.feed_id;
             position.max_ltv_bps = market_ref.max_ltv_bps;
             position.decimals = MINT_DECIMALS;
+            position.borrow_index_snapshot_e18 = market_ref.borrow_index_e18;
+        } else {
+            accrue_position(position, market_ref);
         }
 
         token::transfer(
@@ -166,11 +174,13 @@ pub mod shadow_lend {
     /// every other market in which the user has activity.
     pub fn withdraw(ctx: Context<ModifyPositionWithPrice>, amount: u64) -> Result<()> {
         require!(amount > 0, MarketError::ZeroAmount);
+        let clock = Clock::get()?;
+        accrue_market(&mut ctx.accounts.market, &clock);
         let user_key = ctx.accounts.user.key();
+        accrue_position(&mut ctx.accounts.position, &ctx.accounts.market);
         let position = &mut ctx.accounts.position;
         let position_key = position.key();
         let market_ref = &ctx.accounts.market;
-        let clock = Clock::get()?;
 
         let new_supplied = position
             .supplied
@@ -247,11 +257,13 @@ pub mod shadow_lend {
     /// (other_position, other_price_update).
     pub fn borrow(ctx: Context<ModifyPositionWithPrice>, amount: u64) -> Result<()> {
         require!(amount > 0, MarketError::ZeroAmount);
+        let clock = Clock::get()?;
+        accrue_market(&mut ctx.accounts.market, &clock);
         let user_key = ctx.accounts.user.key();
+        accrue_position(&mut ctx.accounts.position, &ctx.accounts.market);
         let position = &mut ctx.accounts.position;
         let position_key = position.key();
         let market_ref = &ctx.accounts.market;
-        let clock = Clock::get()?;
 
         // Borrowing from a market you're already supplying to is flash-loan
         // shaped: the user's own collateral is the source of their debt. Force
@@ -335,6 +347,9 @@ pub mod shadow_lend {
     /// down debt can only improve health.
     pub fn repay(ctx: Context<ModifyPosition>, amount: u64) -> Result<()> {
         require!(amount > 0, MarketError::ZeroAmount);
+        let clock = Clock::get()?;
+        accrue_market(&mut ctx.accounts.market, &clock);
+        accrue_position(&mut ctx.accounts.position, &ctx.accounts.market);
         let position = &mut ctx.accounts.position;
         let pay = amount.min(position.borrowed);
         require!(pay > 0, MarketError::NothingToRepay);
@@ -376,6 +391,15 @@ pub mod shadow_lend {
     pub fn liquidate(ctx: Context<Liquidate>, repay_amount: u64) -> Result<()> {
         require!(repay_amount > 0, MarketError::ZeroAmount);
         let clock = Clock::get()?;
+        // Bring both markets' indices and the borrower's positions up to date
+        // so the health check and seize math operate on real current debt.
+        accrue_market(&mut ctx.accounts.debt_market, &clock);
+        accrue_market(&mut ctx.accounts.collateral_market, &clock);
+        accrue_position(&mut ctx.accounts.debt_position, &ctx.accounts.debt_market);
+        accrue_position(
+            &mut ctx.accounts.collateral_position,
+            &ctx.accounts.collateral_market,
+        );
         let borrower = ctx.accounts.borrower.key();
         let liquidator_key = ctx.accounts.liquidator.key();
 
@@ -636,6 +660,41 @@ fn usd_8dp_to_token(value_usd_8dp: u128, price: &Price, decimals: u8) -> u64 {
         value_usd_8dp.saturating_mul(mul) / p
     };
     result.try_into().unwrap_or(u64::MAX)
+}
+
+/// Advances the market's borrow index by however many slots have passed since
+/// the last accrual. Linear approximation, which slightly underestimates
+/// continuous compounding but is fine at devnet rates.
+fn accrue_market(market: &mut Market, clock: &Clock) {
+    if clock.slot <= market.last_update_slot {
+        return;
+    }
+    let slots = (clock.slot - market.last_update_slot) as u128;
+    let growth = market
+        .borrow_index_e18
+        .saturating_mul(market.borrow_rate_per_slot_e18 as u128)
+        .saturating_mul(slots)
+        / RATE_SCALE_E18;
+    market.borrow_index_e18 = market.borrow_index_e18.saturating_add(growth);
+    market.last_update_slot = clock.slot;
+}
+
+/// Restates `position.borrowed` from its snapshot index to the market's
+/// current index. Idempotent: after the call the position's snapshot equals
+/// the market's current index.
+fn accrue_position(position: &mut Position, market: &Market) {
+    if position.borrow_index_snapshot_e18 == 0
+        || position.borrowed == 0
+        || position.borrow_index_snapshot_e18 == market.borrow_index_e18
+    {
+        position.borrow_index_snapshot_e18 = market.borrow_index_e18;
+        return;
+    }
+    let current = (position.borrowed as u128)
+        .saturating_mul(market.borrow_index_e18)
+        / position.borrow_index_snapshot_e18;
+    position.borrowed = current.try_into().unwrap_or(u64::MAX);
+    position.borrow_index_snapshot_e18 = market.borrow_index_e18;
 }
 
 fn accumulate_position(
@@ -1075,16 +1134,19 @@ pub struct Market {
     pub amount_per_claim: u64,
     pub max_ltv_bps: u16,
     pub feed_id: [u8; 32],
+    pub borrow_rate_per_slot_e18: u64,
+    pub borrow_index_e18: u128,
+    pub last_update_slot: u64,
     pub total_supplied: u64,
     pub total_borrowed: u64,
-    pub total_claimed: u64,
     pub claim_count: u64,
     pub bump: u8,
     pub authority_bump: u8,
 }
 
 impl Market {
-    pub const SIZE: usize = 32 + 32 + 8 + 2 + 32 + 8 + 8 + 8 + 8 + 1 + 1;
+    pub const SIZE: usize =
+        32 + 32 + 8 + 2 + 32 + 8 + 16 + 8 + 8 + 8 + 8 + 1 + 1;
 }
 
 #[account]
@@ -1097,10 +1159,13 @@ pub struct Position {
     pub max_ltv_bps: u16,
     pub decimals: u8,
     pub bump: u8,
+    /// Snapshot of the market's borrow index at the user's last interaction.
+    /// `effective_borrowed = borrowed × market.borrow_index_e18 / snapshot`.
+    pub borrow_index_snapshot_e18: u128,
 }
 
 impl Position {
-    pub const SIZE: usize = 32 + 32 + 8 + 8 + 32 + 2 + 1 + 1;
+    pub const SIZE: usize = 32 + 32 + 8 + 8 + 32 + 2 + 1 + 1 + 16;
 }
 
 #[account]

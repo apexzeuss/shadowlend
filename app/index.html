@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Cross-asset lending on Solana</title>
-    <script src="./config.js?v=13"></script>
+    <script src="./config.js?v=14"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -2575,7 +2575,7 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=13"></script>
+    <script type="module" src="./sl-client.js?v=14"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       // Display-only flavor, keyed by the market id in config.js. The real
@@ -2710,8 +2710,8 @@
                   <div class="v green">${m.ltvPct}</div>
                 </div>
                 <div class="market-metric">
-                  <div class="k">Per claim</div>
-                  <div class="v">${fmt(m.claimUi, 0)}</div>
+                  <div class="k">Borrow APR</div>
+                  <div class="v">${m.aprDecimal != null ? (m.aprDecimal * 100).toFixed(0) + "%" : "—"}</div>
                 </div>
                 <div class="market-metric">
                   <div class="k">Total supplied</div>

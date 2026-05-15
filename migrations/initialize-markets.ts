@@ -22,8 +22,15 @@ const PYTH_RECEIVER = new PublicKey(
   "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
 );
 
-// Each market: a real test SPL mint, a PDA-owned vault, its own max LTV,
-// and the Pyth feed id used to value its collateral and debt.
+// Borrow rate helper: APR (decimal) → per-slot rate in e18 fixed point,
+// assuming ~78,840,000 slots/year on devnet.
+const SLOTS_PER_YEAR = 78_840_000;
+const rateE18 = (apr: number) =>
+  new BN(Math.round((apr / SLOTS_PER_YEAR) * 1e18));
+
+// Each market: a real test SPL mint, a PDA-owned vault, its own max LTV, its
+// Pyth feed id, and a borrow rate. The rates here are intentionally high so
+// interest accrual is visible inside a single demo session.
 const MARKETS = [
   {
     id: "sol",
@@ -31,6 +38,7 @@ const MARKETS = [
     name: "Solana",
     maxLtvBps: 8000,
     claimUi: 1_000,
+    aprDecimal: 1.0, // 100% APR, demo rate
     feedHex: "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
   },
   {
@@ -39,6 +47,7 @@ const MARKETS = [
     name: "USD Coin",
     maxLtvBps: 8500,
     claimUi: 50_000,
+    aprDecimal: 2.0, // 200% APR, demo rate
     feedHex: "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
   },
   {
@@ -47,6 +56,7 @@ const MARKETS = [
     name: "Wrapped Bitcoin",
     maxLtvBps: 7500,
     claimUi: 50,
+    aprDecimal: 0.5, // 50% APR, demo rate
     feedHex: "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
   },
 ];
@@ -91,7 +101,12 @@ async function main() {
     console.log(`  vault      ${vault.toBase58()}`);
 
     const sig = await program.methods
-      .initializeMarket(toBase(m.claimUi), m.maxLtvBps, Array.from(feedId))
+      .initializeMarket(
+        toBase(m.claimUi),
+        m.maxLtvBps,
+        Array.from(feedId),
+        rateE18(m.aprDecimal)
+      )
       .accounts({
         admin: admin.publicKey,
         market: marketPda,
@@ -124,6 +139,7 @@ function writeConfig(mints: Record<string, string>) {
       `      claimUi: ${m.claimUi},\n` +
       `      decimals: ${DECIMALS},\n` +
       `      feedHex: "${m.feedHex}",\n` +
+      `      aprDecimal: ${m.aprDecimal},\n` +
       `    }`
   ).join(",\n");
 

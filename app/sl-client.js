@@ -178,7 +178,52 @@ async function doConnect(name) {
   };
   await loadIdl();
   program = buildProgram();
+  rememberWallet(name);
   return wallet;
+}
+
+const STORAGE_KEY = "sl-wallet";
+function rememberWallet(name) {
+  try {
+    localStorage.setItem(STORAGE_KEY, name);
+  } catch {}
+}
+function forgetWallet() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
+}
+
+// Silent reconnect on page load. Returns the wallet if the adapter still
+// trusts this origin, or null otherwise. Never shows a popup.
+export async function tryEagerConnect() {
+  let name;
+  try {
+    name = localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+  if (!name) return null;
+  const adapter = adapterFor(name);
+  if (!adapter) return null;
+  try {
+    const resp = await adapter.connect({ onlyIfTrusted: true });
+    const pk = resp?.publicKey || adapter.publicKey;
+    if (!pk) return null;
+    wallet = {
+      name,
+      publicKey: new PublicKey(pk.toString()),
+      adapter,
+    };
+    await loadIdl();
+    program = buildProgram();
+    return wallet;
+  } catch {
+    // Not trusted any more (user revoked, different account, etc.). Quietly
+    // drop the stale pointer so we don't keep retrying.
+    forgetWallet();
+    return null;
+  }
 }
 
 export async function disconnect() {
@@ -189,6 +234,7 @@ export async function disconnect() {
   }
   wallet = null;
   program = null;
+  forgetWallet();
 }
 
 export function getWallet() {
@@ -730,6 +776,7 @@ export async function loadHistory(limit = 25) {
 window.SL = {
   connect,
   disconnect,
+  tryEagerConnect,
   getWallet,
   detectInstalledWallets,
   getMarkets,

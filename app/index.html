@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Credit, hidden in plain sight</title>
-    <script src="./config.js?v=9"></script>
+    <script src="./config.js?v=10"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -2565,7 +2565,7 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=9"></script>
+    <script type="module" src="./sl-client.js?v=10"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       // Display-only flavor, keyed by the market id in config.js. The real
@@ -3653,6 +3653,34 @@
         refreshHeroSignature();
         refreshActivityStats();
         loadRecentProofs();
+        tryEagerReconnect();
+      }
+
+      // Silent reconnect if this browser was already authorized for the wallet
+      // we last connected to. Never opens a popup. If the user has revoked us,
+      // they just see the normal disconnected UI.
+      async function tryEagerReconnect() {
+        if (!window.SL) return;
+        let w = null;
+        try {
+          w = await window.SL.tryEagerConnect();
+        } catch (e) {
+          console.warn("eager connect failed:", e);
+        }
+        if (!w) return;
+        state.wallet = w;
+        const btn = document.getElementById("connectBtn");
+        if (btn) {
+          btn.innerHTML = `<span class="pulse-dot"></span>${shortAddress(
+            w.publicKey
+          )}`;
+          btn.classList.add("connected");
+        }
+        try {
+          await refreshUserState();
+        } catch (e) {
+          console.warn("post-eager state load failed:", e);
+        }
       }
 
       if (window.SL) {

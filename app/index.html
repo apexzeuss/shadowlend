@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark" />
     <title>ShadowLend — Credit, hidden in plain sight</title>
-    <script src="./config.js?v=7"></script>
+    <script src="./config.js?v=8"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400..800&family=Instrument+Serif&display=swap");
 
@@ -1249,6 +1249,16 @@
         text-decoration: none;
         border-bottom: 1px dashed var(--green);
         cursor: pointer;
+      }
+
+      /* The position card has a cream "paper" background, so the empty-state
+         copy needs dark text rather than the default light-on-dark variables. */
+      .pos-card.paper .empty {
+        color: var(--ink-soft);
+      }
+      .pos-card.paper .empty .cta-link {
+        color: var(--ink);
+        border-bottom-color: var(--ink);
       }
 
       .stat-strip {
@@ -2555,7 +2565,7 @@
       </div>
     </div>
 
-    <script type="module" src="./sl-client.js?v=7"></script>
+    <script type="module" src="./sl-client.js?v=8"></script>
     <script>
       // ── Data ────────────────────────────────────────────
       // Display-only flavor, keyed by the market id in config.js. The real
@@ -3470,28 +3480,85 @@
         }
       }
 
-      // Pulls the latest signatures that touched the program and turns them
-      // into the rows of the proof stream. No fake fillers.
+      // Cache parsed instruction details per signature. Signatures are
+      // immutable, so once we've decoded one we never need to refetch.
+      const sigDetailCache = new Map(); // sig -> { kind, marketLabel }
+
+      function rpcCall(method, params) {
+        return fetch(window.SHADOW_LEND_CONFIG.rpcUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+        }).then((r) => r.json());
+      }
+
+      // Resolves a signature to { kind: "supply"|"borrow"|…, marketLabel: "SOL"|… }
+      // by fetching the transaction and reading the program's log messages.
+      async function decodeSignature(sig, programIdStr) {
+        if (sigDetailCache.has(sig)) return sigDetailCache.get(sig);
+        try {
+          const j = await rpcCall("getTransaction", [
+            sig,
+            { maxSupportedTransactionVersion: 0, encoding: "json" },
+          ]);
+          const tx = j?.result;
+          if (!tx) return null;
+          const logs = tx?.meta?.logMessages || [];
+          // Find the first "Program log: Instruction: X" that follows an
+          // invoke of *our* program.
+          let kind = null;
+          let insideOurs = false;
+          for (const l of logs) {
+            if (l.startsWith(`Program ${programIdStr} invoke`)) insideOurs = true;
+            else if (insideOurs && l.startsWith("Program log: Instruction:")) {
+              kind = l.slice("Program log: Instruction:".length).trim();
+              break;
+            } else if (l.startsWith("Program ") && l.includes(" success")) {
+              insideOurs = false;
+            }
+          }
+          // Identify which of our markets is involved by matching mint pubkeys
+          // in the transaction's account list.
+          const keys =
+            tx?.transaction?.message?.accountKeys?.map((k) =>
+              typeof k === "string" ? k : k.pubkey
+            ) || [];
+          const cfgMarkets = window.SL?.getMarkets?.() || [];
+          let marketLabel = null;
+          for (const m of cfgMarkets) {
+            if (keys.includes(m.mint)) {
+              marketLabel = m.label;
+              break;
+            }
+          }
+          const out = { kind, marketLabel };
+          sigDetailCache.set(sig, out);
+          return out;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      // Pulls the latest signatures that touched the program, decodes each one
+      // into instruction + market, and renders the proof stream.
       async function loadRecentProofs(limit = 8) {
         try {
           const programId = window.SL?.PROGRAM_ID;
           if (!programId) return;
-          const rpc = window.SHADOW_LEND_CONFIG.rpcUrl;
-          const res = await fetch(rpc, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              jsonrpc: "2.0",
-              id: 1,
-              method: "getSignaturesForAddress",
-              params: [programId.toString(), { limit }],
-            }),
-          });
-          const j = await res.json();
-          const sigs = j?.result || [];
+          const pidStr = programId.toString();
+          const sigsRes = await rpcCall("getSignaturesForAddress", [
+            pidStr,
+            { limit },
+          ]);
+          const sigs = sigsRes?.result || [];
+          const decoded = await Promise.all(
+            sigs.map((s) => decodeSignature(s.signature, pidStr))
+          );
           proofJobs.length = 0;
           const now = Math.floor(Date.now() / 1000);
-          for (const s of sigs) {
+          for (let i = 0; i < sigs.length; i++) {
+            const s = sigs[i];
+            const d = decoded[i] || {};
             const age = s.blockTime ? now - s.blockTime : null;
             const ageTxt =
               age == null
@@ -3500,12 +3567,15 @@
                   ? `${age}s ago`
                   : age < 3600
                     ? `${Math.floor(age / 60)}m ago`
-                    : `${Math.floor(age / 3600)}h ago`;
+                    : age < 86400
+                      ? `${Math.floor(age / 3600)}h ago`
+                      : `${Math.floor(age / 86400)}d ago`;
+            const kind = d.kind ? humanIxName(d.kind) : "on-chain action";
             proofJobs.push([
               s.err ? "failed" : "done",
-              "on-chain action",
+              kind,
               `${s.signature.slice(0, 6)}…${s.signature.slice(-6)} · slot ${s.slot}`,
-              "—",
+              d.marketLabel || "—",
               ageTxt,
             ]);
           }
@@ -3513,6 +3583,21 @@
         } catch (e) {
           console.warn("loadRecentProofs:", e);
         }
+      }
+
+      function humanIxName(raw) {
+        const m = {
+          Supply: "Supply",
+          Borrow: "Borrow",
+          Withdraw: "Withdraw",
+          Repay: "Repay",
+          ClaimFaucet: "Faucet claim",
+          InitializeMarket: "Market init",
+          SetClaimAmount: "Faucet config",
+          InitUserStats: "Stats init",
+          RecordAction: "Recorded action",
+        };
+        return m[raw] || raw;
       }
 
       async function refreshHeroStats() {

@@ -176,7 +176,7 @@ first.
 
 `solana airdrop 2 --url devnet` will rate-limit you fast. If you need a buffer
 of SOL for a redeploy (~2.5 SOL goes into the buffer rent during an upgrade),
-use [faucet.solana.com](https://faucet.solana.com) instead — it has a separate
+use [faucet.solana.com](https://faucet.solana.com) instead it has a separate
 rate limit and accepts captcha.
 
 ### Pyth `PriceUpdateV2` addresses rotate on devnet
